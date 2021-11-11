@@ -1,0 +1,24 @@
+{
+	"name": "tf-gpu2.6 ,keras2.6",
+	"build": { "dockerfile": "Dockerfile" },
+
+	// Set *default* container specific settings.json values on container create.
+	"settings": { 
+		"python.languageServer": "Pylance",
+		"files.exclude": {
+			"**/__pycache__": true,
+		}
+	},
+
+	// Add the IDs of extensions you want installed when the container is created.
+	"extensions": [
+		"ms-python.python",
+		"ms-python.vscode-pylance",
+		"mhutchie.git-graph",
+		"hoovercj.vscode-power-mode",
+		"ms-toolsai.jupyter",
+		"codezombiech.gitignore"
+	],
+	"runArgs": ["--gpus=all" ,"--privileged" ,"--hostname=container-keras2_6"],
+	"remoteUser": "frank",
+}
