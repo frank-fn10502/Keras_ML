@@ -1,12 +1,15 @@
 import tensorflow as tf
+import os
 
 
-from frank.models.myModel import LeNet, AlexNet, EfficientNetV2_S
+from frank.models.myModel import LeNet, AlexNet, VGG16, InceptionV1, ResNet50, EfficientNetV2_S
 from frank.config import Config
 from pathlib import Path
 from frank.dataLoaders.kerasDataset import MNIST
 from frank.dataLoaders.flowers import Flowers102
 from utils.outputs import ModelOuputHelper
+
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 # tf.config.experimental_run_functions_eagerly(True)
 
@@ -29,7 +32,7 @@ dataLoader = MNIST(cfg, info=True).tocategorical().addChannel().Done()
 
 #model prepare
 #--------------------
-model = LeNet(cfg, dataLoader.inputShape, dataLoader.classes)
+model = ResNet50(cfg, dataLoader.inputShape, dataLoader.classes)
 
 model.compile(
     optimizer=optimizer,
