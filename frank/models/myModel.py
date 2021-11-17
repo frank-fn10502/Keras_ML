@@ -2,24 +2,24 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Model, activations
 from ..config import Config
-from ..layers.myLayer import DistortImage, StochasticDropout
+from ..layers.myLayer import DistortImage, StochasticDropout, Inception
 
 class FrankModel(Model):
-    def __init__(self, name, input_shape=(32, 32, 1)):
+    def __init__(self, name, cfg : Config, input_shape=(32, 32, 1), classes = 10):
         super().__init__(name = name)
-        self.inputShape = input_shape
+        self.classes = cfg.getCfgData('model', 'classes', classes)
+        self.inputShape = cfg.getCfgData('dataLoader', 'input_shape', input_shape)
 
-    def summary(self, print_fn):
-        x = tf.keras.Input(shape=self.inputShape)
-        model = tf.keras.Model(inputs=[x], outputs=self.call(x, training=True))
-        return model.summary(print_fn=print_fn)
+    def build_graph(self):
+        '''
+        為了印出完整的架構
+        '''
+        inputs = keras.Input(shape=(self.inputShape))
+        return Model(inputs=inputs, outputs=self.call(inputs))
 
-class LeNet(Model):
+class LeNet(FrankModel):
     def __init__(self, config: Config, input_shape=(32, 32, 1), classes=10, name="frank.LeNet") -> None:
-        super().__init__(name = name)
-        # self.inputShape = config.getCfgData('model', 'input_shape', input_shape)
-        self.classes = config.getCfgData('model', 'classes', classes)
-        self.inputShape = config.getCfgData('dataLoader', 'input_shape', input_shape)
+        super().__init__(name, config, input_shape, classes)
 
         self._build()
 
@@ -35,13 +35,6 @@ class LeNet(Model):
         self.dense1 = layers.Dense(120, activation='tanh')
         self.dense2 = layers.Dense(84, activation='tanh')
         self.denseOutput = layers.Dense(self.classes, activation=activations.softmax)
-
-    def build_graph(self):
-        '''
-        為了印出完整的架構
-        '''
-        inputs = keras.Input(shape=(self.inputShape))
-        return Model(inputs=inputs, outputs=self.call(inputs))
 
     def call(self ,inputs, training=False):
 
@@ -66,19 +59,42 @@ class LeNet(Model):
 
         return self.denseOutput(x)
 
-class AlexNet(Model):
+class AlexNet(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.AlexNet") -> None:
-        super().__init__(name = name)
-        # self.inputShape = config.getCfgData('model', 'input_shape', input_shape)
-        self.classes = config.getCfgData('model', 'classes', classes)
+        super().__init__(name, config, input_shape, classes)
 
         self._build(config)
 
     def _build(self, config: Config):
+        resize = config.getCfgData('model', 'resize', (224, 224))
+
         self.layer_scale = layers.Rescaling(scale=1./255)
-        self.layer_resizing = layers.Resizing(
-            *config.getCfgData('model', 'resize', (224, 224)),
-            interpolation='nearest')
+        self.layer_resizing = layers.Resizing(*resize,
+                                              interpolation='nearest')
+
+        getConv = lambda k, f, s, p = 'valid' : layers.Conv2D(kernel_size=k, filters=f, strides=s, padding=p, activation='relu')
+
+        self.conv1 = getConv(11, 96, 4)
+        self.moxPool1 = layers.MaxPool2D(pool_size=3, strides=2)
+        self.BN1 = layers.BatchNormalization()
+
+        self.conv2 = getConv(5, 256, 2, 'same')
+        self.moxPool2 = layers.MaxPool2D(pool_size=3, strides=2)
+        self.BN2 = layers.BatchNormalization()
+
+        self.conv3 = getConv(3, 384, 1, 'same')
+        self.conv4 = getConv(3, 384, 1, 'same')
+        self.conv5 = getConv(3, 256, 1, 'same')
+
+        self.maxPool3 = layers.MaxPool2D(pool_size=3, strides=2)
+
+        self.flatten = layers.Flatten()
+        self.dense1 = layers.Dense(4096, activation='relu')
+        self.dropout1 = layers.Dropout(0.5)
+        self.dense2 = layers.Dense(4096, activation='relu')
+        self.dropout2 = layers.Dropout(0.5)
+
+        self.outputs = layers.Dense(self.classes, activation=activations.softmax)
 
     def call(self, inputs, training=False):
 
@@ -87,74 +103,117 @@ class AlexNet(Model):
         x = self.layer_resizing(x)
 
         x = self.__buildConv(x)
-        outputs = self.__buildFC(x)
+        outputs = self.__buildFC(x, training)
 
         return outputs
 
     def __buildConv(self, x):
         # conv1
         #   (227 - 11) / 4 + 1 --> 55 * 55 * 96
-        x = layers.Conv2D(kernel_size=(11,11) ,filters = 96 ,strides=4 ,activation='relu')(x)
+        x = self.conv1(x)
 
         #   (55 - 3) / 2 + 1  --> 27 * 27 * 96
-        x = layers.MaxPool2D(pool_size=3, strides=2)(x)
-        x = layers.BatchNormalization()(x) #本來應該要用 LRN
+        x = self.moxPool1(x)
+        x = self.BN1(x) #本來應該要用 LRN
 
 
         # conv2
         #   27 * 27 * 256
-        x = layers.Conv2D(kernel_size=(5, 5), filters=256,
-                          strides=2, padding="same", activation='relu')(x)
+        x = self.conv2(x)
 
         #   (27 - 3) / 2 + 1 --> 13 * 13 * 256
-        x = layers.MaxPool2D(pool_size=3, strides=2)(x)
-        x = layers.BatchNormalization()(x) #本來應該要用 LRN
+        x = self.moxPool2(x)
+        x = self.BN2(x) #本來應該要用 LRN
 
 
         #conv3 - 4 - 5
-        x = layers.Conv2D(kernel_size=(3, 3), filters=384,
-                          strides=1, padding="same", activation='relu')(x)
-        x = layers.Conv2D(kernel_size=(3, 3), filters=384,
-                          strides=1, padding="same", activation='relu')(x)
-        x = layers.Conv2D(kernel_size=(3, 3), filters=256,
-                          strides=1, padding="same", activation='relu')(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+        x = self.conv5(x)
 
         # (13 - 3) / 2 + 1 --> 6 * 6 * 256
-        x = layers.MaxPool2D(pool_size=3, strides=2)(x)
+        x = self.maxPool3(x)
 
         return x
 
-    def __buildFC(self, x):
-        x = layers.Flatten()(x)
+    def __buildFC(self, x, training : bool):
+        x = self.flatten(x)
         # FC6
-        x = layers.Dense(4096, activation='relu')(x)
-        x = layers.Dropout(0.5)(x)
+        x = self.dense1(x)
+        x = self.dropout1(x, training=training)
 
         # FC7
-        x = layers.Dense(4096, activation='relu')(x)
-        x = layers.Dropout(0.5)(x)
+        x = self.dense2(x)
+        x = self.dropout2(x, training=training)
 
         # FC8
         # x = layers.Dense(1000)(x)
         # x = layers.Dropout(0.5)(x)
-        x = layers.Dense(self.classes, activation=activations.softmax)(x)
+        x = self.outputs(x)
 
         return x
 
-class VGG16(Model):
+class VGG16(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, flexImgSize=False, name="frank.VGG16") -> None:
-        super().__init__(name = name)
-        # self.inputShape = config.getCfgData('model', 'input_shape', input_shape)
-        self.classes = config.getCfgData('model', 'classes', classes)
+        super().__init__(name, config, input_shape, classes)
+
         self.flexImgSize = config.getCfgData('model', 'flexImgSize', flexImgSize)
-        
+
         self._build(config)
 
     def _build(self, config: Config):
+        resize = config.getCfgData('model', 'resize', (224, 224))
         self.layer_scale = layers.Rescaling(scale=1./255)
-        self.layer_resizing = layers.Resizing(
-            *config.getCfgData('model', 'resize', (224, 224)),
-            interpolation='nearest')
+        self.layer_resizing = layers.Resizing(*resize,
+                                              interpolation='nearest')
+
+        getConv = lambda k, f, s = 1, p = 'same', a = 'relu' : layers.Conv2D(kernel_size=k, filters=f, strides=s, padding=p, activation=a)
+
+        self.conv1 = getConv(3, 64)
+        self.conv2 = getConv(3, 64)
+        self.maxPool1 = layers.MaxPool2D(pool_size=2, strides=2)
+
+        self.conv3 = getConv(3, 128)
+        self.conv4 = getConv(3, 128)
+        self.maxPool2 = layers.MaxPool2D(pool_size=2, strides=2)
+
+        self.conv5 = getConv(3, 256)
+        self.conv6 = getConv(3, 256)
+        self.conv7 = getConv(3, 256)
+        self.maxPool3 = layers.MaxPool2D(pool_size=2, strides=2)
+
+        self.conv8 = getConv(3, 512)
+        self.conv9 = getConv(3, 512)
+        self.conv10 = getConv(3, 512)
+        self.maxPool4 = layers.MaxPool2D(pool_size=2, strides=2)
+
+        self.conv11 = getConv(3, 512)
+        self.conv12 = getConv(3, 512)
+        self.conv13 = getConv(3, 512)
+        self.maxPool5 = layers.MaxPool2D(pool_size=2, strides=2)
+        
+        self.flatten = layers.Flatten()
+        self.dense1 = layers.Dense(4096, activation='relu')
+        self.dropout1 = layers.Dropout(0.5)
+
+        self.dense2 = layers.Dense(4096, activation='relu')
+        self.dropout2 = layers.Dropout(0.5)
+
+        self.dense3 = layers.Dense(1000)
+        self.dropout3 = layers.Dropout(0.5)
+
+        self.last_conv1 = getConv(7, 4096, p='valid', a=None)
+        self.last_dropout1 = layers.Dropout(0.5)
+
+        self.last_conv2 = getConv(1, 4096, p='valid', a=None)
+        self.last_dropout2 = layers.Dropout(0.5)
+
+        self.last_conv3 = getConv(1, 1000, p='valid', a=None)
+        self.last_dropout3 = layers.Dropout(0.5)
+
+        self.globalAvgPool = layers.GlobalAveragePooling2D(data_format='channels_last')
+
+        self.outputs = layers.Dense(self.classes, activation=activations.softmax)
 
     def call(self, inputs, training=False):
         x = self.layer_scale(inputs)
@@ -162,104 +221,104 @@ class VGG16(Model):
 
         x = self.__buildConv(x)
 
-        if self.flexImgSize: x = self.__buildLastConv(x)
-        else: x = self.__buildFC(x)
+        if self.flexImgSize: x = self.__buildLastConv(x, training)
+        else: x = self.__buildFC(x, training)
         
-        outputs = layers.Dense(self.classes, activation=activations.softmax)(x)
+        outputs = self.outputs(x)
 
         return outputs
 
     def __buildConv(self, x):
         #conv1
-        x = layers.Conv2D(kernel_size=(3, 3), filters=64, strides=1, padding="same", activation='relu')(x)
+        x = self.conv1(x)
         #conv2
-        x = layers.Conv2D(kernel_size=(3, 3), filters=64, strides=1, padding="same", activation='relu')(x)
+        x = self.conv2(x)
         #(224 - 2) / 2 + 1 --> 112 * 112 * 64
-        x = layers.MaxPool2D(pool_size=2, strides=2)(x)
+        x = self.maxPool1(x)
 
         #conv3
-        x = layers.Conv2D(kernel_size=(3, 3), filters=128, strides=1, padding="same", activation='relu')(x)
+        x = self.conv3(x)
         #conv4
-        x = layers.Conv2D(kernel_size=(3, 3), filters=128, strides=1, padding="same", activation='relu')(x)
+        x = self.conv4(x)
         #(112 - 2) / 2 + 1 --> 56 * 56 * 128
-        x = layers.MaxPool2D(pool_size=2, strides=2)(x)
+        x = self.maxPool2(x)
 
         #conv5
-        x = layers.Conv2D(kernel_size=(3, 3), filters=256, strides=1, padding="same", activation='relu')(x)
+        x = self.conv5(x)
         #conv6
-        x = layers.Conv2D(kernel_size=(3, 3), filters=256, strides=1, padding="same", activation='relu')(x)
+        x = self.conv6(x)
         #conv7
-        x = layers.Conv2D(kernel_size=(3, 3), filters=256, strides=1, padding="same", activation='relu')(x)
+        x = self.conv7(x)
         #(56 - 2) / 2 + 1 --> 28 * 28 * 256
-        x = layers.MaxPool2D(pool_size=2, strides=2)(x)
+        x = self.maxPool3(x)
 
         #conv8
-        x = layers.Conv2D(kernel_size=(3, 3), filters=512, strides=1, padding="same", activation='relu')(x)
+        x = self.conv8(x)
         #conv9
-        x = layers.Conv2D(kernel_size=(3, 3), filters=512, strides=1, padding="same", activation='relu')(x)
+        x = self.conv9(x)
         #conv10
-        x = layers.Conv2D(kernel_size=(3, 3), filters=512, strides=1, padding="same", activation='relu')(x)
+        x = self.conv10(x)
         #(28 - 2) / 2 + 1 --> 14 * 14 * 512
-        x = layers.MaxPool2D(pool_size=2, strides=2)(x)
+        x = self.maxPool4(x)
 
         #conv11
-        x = layers.Conv2D(kernel_size=(3, 3), filters=512, strides=1, padding="same", activation='relu')(x)
+        x = self.conv11(x)
         #conv12
-        x = layers.Conv2D(kernel_size=(3, 3), filters=512, strides=1, padding="same", activation='relu')(x)
+        x = self.conv12(x)
         #conv13
-        x = layers.Conv2D(kernel_size=(3, 3), filters=512, strides=1, padding="same", activation='relu')(x)
+        x = self.conv13(x)
         #(14 - 2) / 2 + 1 --> 7 * 7 * 512
-        x = layers.MaxPool2D(pool_size=2, strides=2)(x)
+        x = self.maxPool5(x)
 
         return x
 
-    def __buildFC(self, x):
+    def __buildFC(self, x, training):
         # FC1
-        x = layers.Flatten()(x)
-        x = layers.Dense(4096, activation='relu')(x)
-        x = layers.Dropout(0.5)(x)
+        x = self.flatten(x)
+        x = self.dense1(x)
+        x = self.dropout1(x, training)
 
         # FC2
-        x = layers.Dense(4096, activation='relu')(x)
-        x = layers.Dropout(0.5)(x)
+        x = self.dense2(x)
+        x = self.dropout2(x, training)
 
         #FC3
-        x = layers.Dense(1000)(x)
-        x = layers.Dropout(0.5)(x)
+        x = self.dense3(x)
+        x = self.dropout3(x, training)
 
         return x
 
-    def __buildLastConv(self ,x):
+    def __buildLastConv(self, x, training):
         # conv1
-        x = layers.Conv2D(kernel_size=(7, 7), filters=4096, strides=1 )(x)
-        x = layers.Dropout(0.5)(x)
+        x = self.last_conv1(x)
+        x = self.last_dropout1(x, training)
 
         # conv2
-        x = layers.Conv2D(kernel_size=(1, 1), filters=4096, strides=1 )(x)
-        x = layers.Dropout(0.5)(x)
+        x = self.last_conv2(x)
+        x = self.last_dropout2(x, training)
 
         # conv3
-        x = layers.Conv2D(kernel_size=(1, 1), filters=1000, strides=1 )(x)
-        x = layers.Dropout(0.5)(x)
+        x = self.last_conv3(x)
+        x = self.last_dropout3(x, training)
 
         #https://keras.io/api/layers/pooling_layers/global_average_pooling2d/
-        x = layers.GlobalAveragePooling2D(data_format='channels_last')(x)
+        x = self.globalAvgPool(x)
 
         return x
 
-class InceptionV1(Model):
+class InceptionV1(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.InceptionV1") -> None:
-        super().__init__(name = name)
-        # self.inputShape = config.getCfgData('model', 'input_shape', input_shape)
-        self.classes = config.getCfgData('model', 'classes', classes)
-        
+        super().__init__(name, config, input_shape, classes)
+
         self._build(config)
 
     def _build(self, config: Config):
+        resize = config.getCfgData('model', 'resize', (224, 224))
+
         self.layer_scale = layers.Rescaling(scale=1./255)
-        self.layer_resizing = layers.Resizing(
-            *config.getCfgData('model', 'resize', (224, 224)),
-            interpolation='nearest')
+        self.layer_resizing = layers.Resizing(*resize,
+                                              interpolation='nearest')
+        
 
     def call(self, inputs, training=False):
         x = self.layer_scale(inputs)
@@ -315,14 +374,13 @@ class InceptionV1(Model):
         b5x5 = layers.Conv2D(kernel_size=(5, 5), filters=c5x5, padding="same", activation='relu')(b5x5)
 
         pool = layers.MaxPool2D(pool_size=3 ,strides=1, padding='same')(x)
-        pool = layers.Conv2D(kernel_size=(1, 1), filters=c1x1_pool, padding="same", activation='relu' )(pool)
+        pool = layers.Conv2D(kernel_size=(1, 1), filters=c1x1_pool, padding="same", activation='relu')(pool)
 
         return layers.concatenate([b1x1, b3x3, b5x5 ,pool],axis=3)
 
 class ResNet50(Model):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.ResNet50") -> None:
         super().__init__(name = name)
-        # self.inputShape = config.getCfgData('model', 'input_shape', input_shape)
         self.classes = config.getCfgData('model', 'classes', classes)
         
         self._build(config)
@@ -387,7 +445,6 @@ class ResNet50(Model):
 class EfficientNetV2_S(Model):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.EfficientNetV2_S") -> None:
         super().__init__(name = name)
-        # self.inputShape = config.getCfgData('model', 'input_shape', input_shape)
         self.classes = config.getCfgData('model', 'classes', classes)
         
         self._build(config)
