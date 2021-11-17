@@ -2,7 +2,10 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Model, activations
 from ..config import Config
-from ..layers.myLayer import DistortImage, StochasticDropout, Inception, ResidualBottleneckBlock
+from ..layers.myLayer import DistortImage, InceptionBlock, ResidualBottleneckBlock
+from ..layers import efficientv2
+# from ..layers.efficientv2 import StochasticDropout
+
 
 class FrankModel(Model):
     def __init__(self, name, cfg : Config, input_shape=(32, 32, 1), classes = 10):
@@ -324,21 +327,21 @@ class InceptionV1(FrankModel):
         self.conv2 = layers.Conv2D(kernel_size=3, strides=1, filters=192, padding='same', activation='relu')
         self.pool2 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
 
-        self.inception1 = Inception(64 ,(96,128) ,(16 ,32) ,32)
-        self.inception2 = Inception(128 ,(128,192) ,(32 ,96) ,64)
+        self.inception1 = InceptionBlock(64 ,(96,128) ,(16 ,32) ,32)
+        self.inception2 = InceptionBlock(128 ,(128,192) ,(32 ,96) ,64)
 
         self.pool3 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
 
-        self.inception3 = Inception(192 ,(96,208) ,(16 ,48) ,64)
-        self.inception4 = Inception(160 ,(112,224) ,(24 ,64) ,64)
-        self.inception5 = Inception(128 ,(128,256) ,(24 ,64) ,64)
-        self.inception6 = Inception(112 ,(144,288) ,(32 ,64) ,64)
-        self.inception7 = Inception(256 ,(160,320) ,(32 ,128) ,128)
+        self.inception3 = InceptionBlock(192 ,(96,208) ,(16 ,48) ,64)
+        self.inception4 = InceptionBlock(160 ,(112,224) ,(24 ,64) ,64)
+        self.inception5 = InceptionBlock(128 ,(128,256) ,(24 ,64) ,64)
+        self.inception6 = InceptionBlock(112 ,(144,288) ,(32 ,64) ,64)
+        self.inception7 = InceptionBlock(256 ,(160,320) ,(32 ,128) ,128)
 
         self.pool4 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
 
-        self.inception8 = Inception(256 ,(160,320) ,(32 ,128) ,128)
-        self.inception9 = Inception(384 ,(192,384) ,(48 ,128) ,128)
+        self.inception8 = InceptionBlock(256 ,(160,320) ,(32 ,128) ,128)
+        self.inception9 = InceptionBlock(384 ,(192,384) ,(48 ,128) ,128)
         
         self.globalPool = layers.GlobalAveragePooling2D(data_format='channels_last')
         self.dropout = layers.Dropout(.4)
@@ -430,123 +433,57 @@ class ResNet50(FrankModel):
 
         return self.outputs(x)
 
-class EfficientNetV2_S(Model):
+class EfficientNetV2_S(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.EfficientNetV2_S") -> None:
-        super().__init__(name = name)
-        self.classes = config.getCfgData('model', 'classes', classes)
-        
+        super().__init__(name, config, input_shape, classes)
+
         self._build(config)
+
 
     def _build(self, config: Config):
         self.layer_scale = layers.Rescaling(scale=1./255)
         self.distortImage = DistortImage()
 
+        self.conv1 = efficientv2.BN_ConvBlock(stride=2, filters=24)
+        
+        getStride = lambda i ,s: s if i == 0 else 1
+        getInOutFilter = lambda i ,o: (i ,o) if i == 0 else (o ,o)
+        self.FusedBlockList = []
+        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(24, 24), 1, 3, getStride(i ,1)) for i in range(2)])
+        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(24, 38), 4, 3, getStride(i ,2)) for i in range(4)])
+        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(48, 64), 4, 3, getStride(i ,2)) for i in range(4)])
+
+        self.MB_BlockList = []
+        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(64, 128), 4, 3, getStride(i ,2), .25) for i in range(6)])
+        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(64, 128), 4, 3, getStride(i ,2), .25) for i in range(9)])
+        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(64, 128), 4, 3, getStride(i ,2), .25) for i in range(15)])
+
+        self.conv2 = efficientv2.BN_ConvBlock(kernel_size=1, stride=1, filters=1280)
+        self.globalAvgPool = layers.GlobalAvgPool2D()
+        self.dropout = layers.Dropout(self.dropout)
+        self.outputs = layers.Dense(self.classes, activation=activations.softmax)
+
     def call(self, inputs, training=False):
-        x = self.distortImage(inputs)
+        x = inputs
+        # x = self.distortImage(inputs)
 
         x = self.layer_scale(x)
 
-        #stem 輸出channel 和 下一層的 input channel 相同
-        x = self.__conv_BN_silu_(x ,stride=2 ,filters=24) 
+        # stem 輸出 channel 和 下一層的 input channel 相同
+        x = self.conv1(x)
 
-        #
-        x = self.__Fused_MBConv(x, 24, 24, 1, 3, 1, 2)
-        x = self.__Fused_MBConv(x, 24, 38, 4, 3, 2, 4)
-        x = self.__Fused_MBConv(x, 48, 64, 4, 3, 2, 4)
-        x = self.__MBConv(x, 64, 128, 4, 3, 2, .25, 6)
-        x = self.__MBConv(x, 128, 160, 6, 3, 1, .25, 9)
-        x = self.__MBConv(x, 160, 256, 6, 3, 2, .25, 15)
+        # body
+        for block in self.FusedBlockList:
+            x = block(x)
+
+        for block in self.MB_BlockList:
+            x = block(x)
 
         # head
-        x = self.__conv_BN_silu_(x ,kernel_size=1 ,stride=1 ,filters=1280) 
-        x = layers.GlobalAvgPool2D()(x)
-        x = layers.Dropout(self.dropout)(x)
+        x = self.conv2(x)
+        x = self.globalAvgPool(x)
+        x = self.dropout(self.dropout)(x, training)
 
 
         #output
-        outputs = layers.Dense(self.classes, activation=activations.softmax)(x)
-        return outputs        
-
-    def __MBConv(self, inputs, input_filters, output_filters, expansion_ratio, kernel_size, strides, se_ratio, number_layers):
-        x = inputs
-        for i in range(number_layers):
-            x = self.__conv_BN_silu_(x, input_filters * expansion_ratio ,kernel_size=1)
-            x = self.__depthwiseconv_BN_silu_(x ,kernel_size=kernel_size,stride=strides)
-
-            x = self.__se(x, input_filters * se_ratio, input_filters * expansion_ratio)
-
-            x = layers.Conv2D(kernel_size=1 ,strides=1 ,filters=output_filters,padding='same')(x)
-            x = layers.BatchNormalization()(x)
-
-            x = self.__residual(inputs ,x ,strides ,input_filters ,output_filters )
-
-            strides = 1 # 根據 code 決定的
-            input_filters = output_filters # 根據 code 決定的
-            inputs = x
-            
-        return x
-        
-    def __Fused_MBConv(self, inputs, input_filters, output_filters , expansion_ratio, kernel_size, strides, number_layers):
-        x = inputs
-        for i in range(number_layers):
-            if(expansion_ratio != 1):
-                x = self.__conv_BN_silu_(
-                    x, input_filters * expansion_ratio, stride=strides, kernel_size=kernel_size)
-
-            #se 似乎沒有 se block
-
-            k_s = 1 if expansion_ratio != 1 else kernel_size
-            s = 1 if expansion_ratio != 1 else strides
-            x = layers.Conv2D(kernel_size=k_s ,strides=s ,filters= output_filters ,padding='same')(x)
-            x = layers.BatchNormalization()(x)
-
-            x = self.__residual(inputs, x, strides, input_filters, output_filters)
-
-            strides = 1 # 根據 code 決定的
-            input_filters = output_filters # 根據 code 決定的
-            inputs = x
-
-        return x
-
-    def __se(self ,x ,filters ,output_filters):
-        # 預設不用
-        # x = layers.AveragePooling2D()(x) 應該要用 avg_pooling
-
-        x = layers.Conv2D(kernel_size=1 ,strides= 1 ,filters=filters, padding='same')(x)
-        x = tf.nn.silu(x)
-
-        x = layers.Conv2D(kernel_size=1 ,strides=1 ,filters=output_filters, padding='same')(x)
-        x = activations.sigmoid(x)
-
-        return x
-
-    def __conv_BN_silu_(self, x ,filters, kernel_size=(3, 3), stride=1 ,padding='same'):
-        x = layers.Conv2D(kernel_size=kernel_size,
-                          filters=filters, strides=stride ,padding=padding)(x)
-        x = layers.BatchNormalization()(x)
-        x = tf.nn.silu(x)
-
-
-        return x
-    
-    def __depthwiseconv_BN_silu_(self, x , kernel_size=(3, 3), stride=1 ,padding='same'):
-        x = layers.DepthwiseConv2D(kernel_size=kernel_size, strides=stride ,padding=padding)(x)
-        x = layers.BatchNormalization()(x)
-        x = tf.nn.silu(x)
-
-
-        return x
-
-    def __residual(self, inputs, x, strides , input_filters ,output_filters):
-        if (strides == 1 and input_filters == output_filters):
-            # 在 keras conv2d 中 paddind == 'same' : 公式 output_size = w / s
-            # 在 effencientnet 中 input 和 output 維度都要相同才做相加(code 這樣寫)
-
-            # x = layers.Dropout(self.dropout)(x) 不太一樣
-
-
-            drop = StochasticDropout()
-            x = drop(x) #需要繼承 layers.Layer
-            x = layers.Add()([inputs ,x])
-
-        return x
+        return self.outputs(x)
