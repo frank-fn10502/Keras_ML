@@ -318,65 +318,71 @@ class InceptionV1(FrankModel):
         self.layer_scale = layers.Rescaling(scale=1./255)
         self.layer_resizing = layers.Resizing(*resize,
                                               interpolation='nearest')
+
+        self.conv1 = layers.Conv2D(kernel_size=7 ,strides=2 ,filters=64 ,activation='relu' ,padding='same')
+        self.pool1 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
+        self.conv2 = layers.Conv2D(kernel_size=3, strides=1, filters=192, padding='same', activation='relu')
+        self.pool2 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
+
+        self.inception1 = Inception(64 ,(96,128) ,(16 ,32) ,32)
+        self.inception2 = Inception(128 ,(128,192) ,(32 ,96) ,64)
+
+        self.pool3 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
+
+        self.inception3 = Inception(192 ,(96,208) ,(16 ,48) ,64)
+        self.inception4 = Inception(160 ,(112,224) ,(24 ,64) ,64)
+        self.inception5 = Inception(128 ,(128,256) ,(24 ,64) ,64)
+        self.inception6 = Inception(112 ,(144,288) ,(32 ,64) ,64)
+        self.inception7 = Inception(256 ,(160,320) ,(32 ,128) ,128)
+
+        self.pool4 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
+
+        self.inception8 = Inception(256 ,(160,320) ,(32 ,128) ,128)
+        self.inception9 = Inception(384 ,(192,384) ,(48 ,128) ,128)
         
+        self.globalPool = layers.GlobalAveragePooling2D(data_format='channels_last')
+        self.dropout = layers.Dropout(.4)
+
+        self.outputs = layers.Dense(self.classes, activation=activations.softmax)
 
     def call(self, inputs, training=False):
         x = self.layer_scale(inputs)
         x = self.layer_resizing(x)
         
-        x = layers.Conv2D(kernel_size=7 ,strides=2 ,filters=64 ,activation='relu' ,padding='same')(x)
+        x = self.conv1(x)
         #https://keras.io/api/layers/pooling_layers/max_pooling2d/
-        x = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')(x)
-        x = layers.Conv2D(kernel_size=3, strides=1, filters=192, padding='same', activation='relu')(x)
-        x = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')(x)
+        x = self.pool1(x)
+        x = self.conv2(x)
+        x = self.pool2(x)
 
 
-        x = self.__Inception(x ,64 ,(96,128) ,(16 ,32) ,32)
-        x = self.__Inception(x ,128 ,(128,192) ,(32 ,96) ,64)
+        x = self.inception1(x)
+        x = self.inception2(x)
 
 
-        x = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')(x)
+        x = self.pool3(x)
 
 
-        x = self.__Inception(x ,192 ,(96,208) ,(16 ,48) ,64)
-        x = self.__Inception(x ,160 ,(112,224) ,(24 ,64) ,64)
-        x = self.__Inception(x ,128 ,(128,256) ,(24 ,64) ,64)
-        x = self.__Inception(x ,112 ,(144,288) ,(32 ,64) ,64)
-        x = self.__Inception(x ,256 ,(160,320) ,(32 ,128) ,128)
+        x = self.inception3(x)
+        x = self.inception4(x)
+        x = self.inception5(x)
+        x = self.inception6(x)
+        x = self.inception7(x)
 
 
-        x = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')(x)
+        x = self.pool4(x)
 
 
-        x = self.__Inception(x ,256 ,(160,320) ,(32 ,128) ,128)
-        x = self.__Inception(x ,384 ,(192,384) ,(48 ,128) ,128)
+        x = self.inception8(x)
+        x = self.inception9(x)
 
 
-        x = layers.GlobalAveragePooling2D(data_format='channels_last')(x)
-        x = layers.Dropout(.4)(x)
+        x = self.globalPool(x)
+        x = self.dropout(x, training)
     
-        outputs = layers.Dense(self.classes, activation=activations.softmax)(x)
+        outputs = self.outputs(x)
 
         return outputs
-
-    def __Inception(self, x, *depth):
-        '''
-        *depth: [conv1x1 ,(c3x3_r ,c3x3) ,(c5x5_r,c5x5) ,c1x1_pool]
-        '''
-        conv1x1 ,(c3x3_r ,c3x3) ,(c5x5_r,c5x5) ,c1x1_pool = depth
-
-        b1x1 = layers.Conv2D(kernel_size=(1, 1), filters=conv1x1, padding="same", activation='relu')(x)
-
-        b3x3 = layers.Conv2D(kernel_size=(1, 1), filters=c3x3_r, padding="same", activation='relu')(x)
-        b3x3 = layers.Conv2D(kernel_size=(3, 3), filters=c3x3, padding="same", activation='relu')(b3x3)
-
-        b5x5 = layers.Conv2D(kernel_size=(1, 1), filters=c5x5_r, padding="same", activation='relu')(x)
-        b5x5 = layers.Conv2D(kernel_size=(5, 5), filters=c5x5, padding="same", activation='relu')(b5x5)
-
-        pool = layers.MaxPool2D(pool_size=3 ,strides=1, padding='same')(x)
-        pool = layers.Conv2D(kernel_size=(1, 1), filters=c1x1_pool, padding="same", activation='relu')(pool)
-
-        return layers.concatenate([b1x1, b3x3, b5x5 ,pool],axis=3)
 
 class ResNet50(Model):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.ResNet50") -> None:
