@@ -27,29 +27,9 @@ class IkerasDataset(IDataset):
             print(
                 f"train_x:{self.train_x.shape} \ntrain_y:{self.train_y.shape} \ntest_x:{self.test_x.shape} \ntest_y:{self.test_y.shape}")
 
-        def getDatas(datas, labels, batchSize):
-            # batch_datas = [] 
-            # batch_labels = [] 
-            # for i ,train in enumerate(zip(datas, labels)): 
-            #     if i!= 0 and i % x == 0: 
-            #         yield tuple((batch_datas, batch_labels))
-            #         batch_datas = []
-            #         batch_labels = []
-
-            #     batch_datas.append(train[0])
-            #     batch_labels.append(train[0])
-            while True:
-                start = 0
-                end = batchSize
-
-                while start  < len(labels): 
-                    # load your images from numpy arrays or read from directory
-                    x = datas[start:end] 
-                    y = labels[start:end]
-                    yield x, y
-
-                    start += batchSize
-                    end += batchSize            
+        def getDatas(datas, labels, batchSize) -> tf.data.Dataset:
+            d = tf.data.Dataset.from_tensor_slices((datas, labels))
+            return d.shuffle(batchSize * 4).batch(batchSize)
 
         batchSize = self.cfg.getCfgData('dataLoader', 'batch_size')
         self.trainData = getDatas(self.train_x, self.train_y, batchSize)
