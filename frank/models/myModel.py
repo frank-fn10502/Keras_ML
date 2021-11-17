@@ -19,7 +19,7 @@ class LeNet(Model):
         super().__init__(name = name)
         # self.inputShape = config.getCfgData('model', 'input_shape', input_shape)
         self.classes = config.getCfgData('model', 'classes', classes)
-        self.inputShape = input_shape
+        self.inputShape = config.getCfgData('dataLoader', 'input_shape', input_shape)
 
         self._build()
 

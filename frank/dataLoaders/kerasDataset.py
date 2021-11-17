@@ -25,19 +25,19 @@ class IkerasDataset(IDataset):
         '''
         if self.info:
             print(
-                f"train_x:{self.train_x.shape} \ntrain_y:{self.train_y.shape} \ntest_x:{self.test_x.shape} \ntest_y:{self.test_y.shape}")
+                f"train_x:{self._train_x.shape} \ntrain_y:{self._train_y.shape} \ntest_x:{self._test_x.shape} \ntest_y:{self._test_y.shape}")
 
         def getDatas(datas, labels, batchSize) -> tf.data.Dataset:
             d = tf.data.Dataset.from_tensor_slices((datas, labels))
             return d.shuffle(batchSize * 4).batch(batchSize)
 
         batchSize = self.cfg.getCfgData('dataLoader', 'batch_size')
-        self.trainData = getDatas(self.train_x, self.train_y, batchSize)
-        self.validationData = getDatas(self.test_x, self.test_y ,batchSize)
+        self.trainData = getDatas(self._train_x, self._train_y, batchSize)
+        self.validationData = getDatas(self._test_x, self._test_y ,batchSize)
         self.batchSize = batchSize
 
-        self.inputShape = self.train_x[0].shape
-        self.classes = self.train_y[0].size
+        self.inputShape = self._train_x[0].shape
+        self.classes = self._train_y[0].size
 
         return self
 
@@ -48,17 +48,17 @@ class IkerasDataset(IDataset):
         '''
         label 轉換成 one-hot 編碼(train_y 和 test_y)
         '''
-        pre_train_y = self.train_y[0]
-        pre_test_y = self.test_y[0]
+        pre_train_y = self._train_y[0]
+        pre_test_y = self._test_y[0]
 
-        self.train_y = tf.keras.utils.to_categorical(self.train_y, dtype="uint8")
-        self.test_y  = tf.keras.utils.to_categorical(self.test_y, dtype="uint8")
+        self._train_y = tf.keras.utils.to_categorical(self._train_y, dtype="uint8")
+        self._test_y  = tf.keras.utils.to_categorical(self._test_y, dtype="uint8")
 
         if self.info:
             print("one-hot encoder:")
-            print(f"\tindex: 0 ,pre: {pre_train_y} ,after:{self.train_y[0]}")
+            print(f"\tindex: 0 ,pre: {pre_train_y} ,after:{self._train_y[0]}")
             print(
-                f"\tindex: 0 ,pre: {pre_test_y} ,after:{self.test_y[0]}\n{'-'*10}")
+                f"\tindex: 0 ,pre: {pre_test_y} ,after:{self._test_y[0]}\n{'-'*10}")
         
         return self
 
@@ -70,13 +70,13 @@ class MNIST(IkerasDataset):
 
     def __init__(self, cfg : Config, info: bool = False) -> None:
         self.dataset = keras.datasets.mnist
-        (self.train_x, self.train_y), \
-        (self.test_x, self.test_y) = self.dataset.load_data()
+        (self._train_x, self._train_y), \
+        (self._test_x, self._test_y) = self.dataset.load_data()
         super().__init__(cfg, info)
 
     def addChannel(self) -> 'MNIST':
-        self.train_x = np.expand_dims(self.train_x, 3)
-        self.test_x = np.expand_dims(self.test_x, 3)
+        self._train_x = np.expand_dims(self._train_x, 3)
+        self._test_x = np.expand_dims(self._test_x, 3)
         return self
 
 class CIFAR10(IkerasDataset):
@@ -88,8 +88,8 @@ class CIFAR10(IkerasDataset):
 
     def __init__(self, cfg : Config, info: bool = False) -> None:
         self.dataset = keras.datasets.cifar10
-        (self.train_x, self.train_y), \
-        (self.test_x, self.test_y) = self.dataset.load_data()
+        (self._train_x, self._train_y), \
+        (self._test_x, self._test_y) = self.dataset.load_data()
         super().__init__(cfg, info)
 
 class CIFAR100(IkerasDataset):
@@ -104,6 +104,6 @@ class CIFAR100(IkerasDataset):
 
     def __init__(self, cfg : Config, label_mode: str = "fine", info: bool = False) -> None:
         self.dataset = keras.datasets.cifar100
-        (self.train_x, self.train_y), \
-        (self.test_x, self.test_y) = self.dataset.load_data(label_mode=label_mode)
+        (self._train_x, self._train_y), \
+        (self._test_x, self._test_y) = self.dataset.load_data(label_mode=label_mode)
         super().__init__(cfg, info)

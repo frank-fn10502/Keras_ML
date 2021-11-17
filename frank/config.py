@@ -7,7 +7,7 @@ class Config:
     取得 trainig 的設定檔
     '''
     def __init__(self, path='cfg.ini') -> None:
-        self.config = configparser.ConfigParser()
+        self.config = configparser.ConfigParser(allow_no_value=True)
         self.config.read(path)
 
     def getCfgData(self, section, key, data = None):
@@ -36,6 +36,10 @@ class Config:
             result = data
 
         return result
+
+    def setCommient(self, section: str, s: str):
+        s = s.replace("\n","\n#")
+        self.config.set(section, f'# {s}')
 
     def saveConfig(self, savePath: Path):
         '''

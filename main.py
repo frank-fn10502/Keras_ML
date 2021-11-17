@@ -15,7 +15,7 @@ from utils.outputs import ModelOuputHelper
 #--------------------
 cfg = Config()
 
-epoch = cfg.getCfgData('train', 'epoch', 10)
+epoch = cfg.getCfgData('train', 'epoch', 2)
 optimizer=tf.keras.optimizers.SGD(learning_rate=0.01, 
                                   momentum=0.9)
 loss='categorical_crossentropy',
@@ -31,11 +31,6 @@ dataLoader = MNIST(cfg, info=True).tocategorical().addChannel().Done()
 #--------------------
 model = LeNet(cfg, dataLoader.inputShape, dataLoader.classes)
 
-# inputs = tf.keras.Input(shape=dataLoader.inputShape)
-# outputs = myModel(inputs)
-# model = tf.keras.Model(inputs=inputs, outputs=outputs, name=myModel.name)
-# model.build(input_shape=dataLoader.inputShape)
-
 model.compile(
     optimizer=optimizer,
     loss=loss,
@@ -45,18 +40,18 @@ model.compile(
 
 outputHelper = ModelOuputHelper(model=model, root_directory='temp')
 
+cfg.setCommient('dataLoader',dataLoader.__doc__)#紀錄 dataset
 cfg.saveConfig(savePath=Path(outputHelper.cfgFolder))
-#dataset 應該也要記錄 (outputHelper
 outputHelper.seveModelArchitecture()
 
 #training
+history = \
 model.fit(
     x = dataLoader.trainData,
     epochs=epoch,
     validation_data=dataLoader.validationData,
-    # steps_per_epoch = 10,
     callbacks=[
-        tf.keras.callbacks.ModelCheckpoint(outputHelper.weightsFolder / '{epoch:03d}-{val_accuracy:.3f}.h5',
+        tf.keras.callbacks.ModelCheckpoint(outputHelper.weightsFolder / '{epoch:02d}-{val_accuracy:.3f}.h5',
                                            save_weights_only=True,
                                            monitor='val_accuracy',
                                            mode='max',
@@ -65,5 +60,5 @@ model.fit(
     ]
 )
 
-outputHelper.saveTrainProcessImg()
-outputHelper.saveTrainHistory()
+outputHelper.saveTrainProcessImg(history)
+outputHelper.saveTrainHistory(history)

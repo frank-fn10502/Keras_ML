@@ -13,11 +13,16 @@ class Flowers102(IDataset):
     '''
     def __init__(self, 
                  cfg : Config, 
+                 info = False,
                  labelPath = 'dataset/flowers/imagelabels.mat', 
                  imagePath = 'dataset/flowers/') -> None:
 
         super().__init__()
+        if(info):
+            print(f"dataset: {self.__doc__} \n")
+            
         self.cfg = cfg
+        self.info = info
         self.labelPath = labelPath
         self.imagePath = imagePath
 
@@ -42,7 +47,6 @@ class Flowers102(IDataset):
                 tf.keras.utils.to_categorical(self.__labels)
             )
         )
-        # self.labelMode = 'categorical'
 
         if self.info:
             print("one-hot encoder:")
@@ -52,7 +56,7 @@ class Flowers102(IDataset):
 
     def Done(self) -> IDataset:
         batchSize = self.cfg.getCfgData('dataLoader', 'batch_size', self.__batchSize)
-        imgSize = self.cfg.getCfgData('dataLoader', 'img_size', self.__imgSize)
+        imgSize = self.cfg.getCfgData('dataLoader', 'input_shape', (*self.__imgSize ,3))[0:2]
         validationSplit = self.cfg.getCfgData('dataLoader', 'validation', self.__split)
         seed = self.cfg.getCfgData('dataLoader', 'seed', self.__seed)
 
