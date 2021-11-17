@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Model, activations
 from ..config import Config
-from ..layers.myLayer import DistortImage, StochasticDropout, Inception
+from ..layers.myLayer import DistortImage, StochasticDropout, Inception, ResidualBottleneckBlock
 
 class FrankModel(Model):
     def __init__(self, name, cfg : Config, input_shape=(32, 32, 1), classes = 10):
@@ -384,69 +384,51 @@ class InceptionV1(FrankModel):
 
         return outputs
 
-class ResNet50(Model):
+class ResNet50(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.ResNet50") -> None:
-        super().__init__(name = name)
-        self.classes = config.getCfgData('model', 'classes', classes)
-        
+        super().__init__(name, config, input_shape, classes)
+
         self._build(config)
 
     def _build(self, config: Config):
+        resize = config.getCfgData('model', 'resize', (224, 224))
+
         self.layer_scale = layers.Rescaling(scale=1./255)
-        self.layer_resizing = layers.Resizing(
-            *config.getCfgData('model', 'resize', (224, 224)),
-            interpolation='nearest')
+        self.layer_resizing = layers.Resizing(*resize,
+                                              interpolation='nearest')
+
+        self.conv1 = layers.Conv2D(kernel_size=(7, 7), filters=64, strides=2, padding='same')
+        self.pool1 = layers.MaxPool2D(pool_size=(3,3),strides=2 ,padding='same')
+        
+        self._residualblockList = []
+        self._residualblockList.append(ResidualBottleneckBlock(64, 64, 256, changeShortcutChannel=True))
+        self._residualblockList.extend([ResidualBottleneckBlock(64, 64, 256) for i in range(2)])
+
+        self._residualblockList.append(ResidualBottleneckBlock(128, 128, 512, needDownSample=True))
+        self._residualblockList.extend([ResidualBottleneckBlock(128, 128, 512) for i in range(3)])
+
+        self._residualblockList.append(ResidualBottleneckBlock(256, 256, 1024, needDownSample=True))
+        self._residualblockList.extend([ResidualBottleneckBlock(256, 256, 1024) for i in range(5)])
+
+        self._residualblockList.append(ResidualBottleneckBlock(512, 512, 2048, needDownSample=True))
+        self._residualblockList.extend([ResidualBottleneckBlock(512, 512, 2048) for i in range(3)])
+
+        self.globalPool = layers.GlobalAveragePooling2D()
+        self.outputs = layers.Dense(self.classes, activation=activations.softmax)
 
     def call(self, inputs, training=False):
         x = self.layer_scale(inputs) 
         x = self.layer_resizing(x)
 
-        x = layers.Conv2D(kernel_size=(7, 7), filters=64, strides=2, padding='same')(x)
-        x = layers.MaxPool2D(pool_size=(3,3),strides=2 ,padding='same')(x)
+        x = self.conv1(x)
+        x = self.pool1(x)
 
-        x = self.__residualBottleneckBlock(x, 64, 64, 256, changeShortcutChannel=True)
-        for i in range(2): x = self.__residualBottleneckBlock(x ,64,64,256)
+        for block in self._residualblockList:
+            x = block(x)
 
-        x = self.__residualBottleneckBlock(x, 128, 128, 512, needDownSample=True)
-        for i in range(3): x = self.__residualBottleneckBlock(x ,128, 128, 512)
+        x = self.globalPool(x)
 
-        x = self.__residualBottleneckBlock(x, 256, 256, 1024, needDownSample=True)
-        for i in range(5): x = self.__residualBottleneckBlock(x ,256, 256, 1024)
-
-        x = self.__residualBottleneckBlock(x, 512, 512, 2048, needDownSample=True)
-        for i in range(3): x = self.__residualBottleneckBlock(x ,512, 512, 2048)
-
-        x = layers.GlobalAveragePooling2D()(x)
-
-
-        outputs = layers.Dense(self.classes, activation=activations.softmax)(x)
-
-        return outputs
-
-    def __residualBottleneckBlock(self, pre_x, *f, needDownSample=False, changeShortcutChannel=False):
-        '''
-        *f : conv1x1_filter ,conv3x3_filter ,conv1x1_filter
-        '''
-        (cf1 ,cf2 ,cf3) = f
-        x = self.__BN_relu_conv(pre_x, kernel_size=(1,1) , filters=cf1 
-                                     , stride=2 if needDownSample else 1)
-        x = self.__BN_relu_conv(x,filters=cf2)
-        x = self.__BN_relu_conv(x, kernel_size=(1,1) ,filters=cf3)
-
-        if needDownSample or changeShortcutChannel:
-            #filters 要使用最終的輸出才可相加
-            pre_x = self.__BN_relu_conv(pre_x, kernel_size=(1,1), filters=cf3, 
-                                        stride=2 if needDownSample else 1)
-
-        return layers.Add()([pre_x ,x])
-
-    def __BN_relu_conv(self, x, filters, kernel_size=(3, 3), stride=1):
-        x = layers.BatchNormalization()(x)
-        x = layers.ReLU()(x)
-        x = layers.Conv2D(kernel_size=kernel_size,
-                          filters=filters, strides=stride ,padding='same')(x)
-
-        return x
+        return self.outputs(x)
 
 class EfficientNetV2_S(Model):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.EfficientNetV2_S") -> None:

@@ -26,7 +26,6 @@ class StochasticDropout(layers.Layer):
         output = inputs / survival_prob * binary_tensor
         return output
 
-
 # 使用 google effNetv2 的 code 包裝成 keras.layers
 class DistortImage(layers.Layer):
     '''
@@ -108,3 +107,38 @@ class Inception(layers.Layer):
         pool = self.b1x1_pool(self.pool(inputs))
 
         return layers.concatenate([b1x1, b3x3, b5x5 ,pool],axis=3)
+
+class ResNet50_BN_Conv(layers.Layer):
+    def __init__(self, filters, kernel_size=(3, 3), stride=1):
+        super().__init__()
+        self.BN = layers.BatchNormalization()
+        self.relu = layers.ReLU()
+        self.conv = layers.Conv2D(kernel_size=kernel_size, filters=filters, strides=stride ,padding='same')
+
+    def call(self, inputs):
+        return self.conv(self.relu(self.BN(inputs)))
+
+class ResidualBottleneckBlock(layers.Layer):
+    def __init__(self, *f, needDownSample=False, changeShortcutChannel=False):
+        super().__init__()
+        self.needDownSample = needDownSample
+        self.changeShortcutChannel = changeShortcutChannel
+        self._build(f)
+
+    def _build(self, f):
+        (cf1 ,cf2 ,cf3) = f
+
+        self.conv1 = ResNet50_BN_Conv(kernel_size=(1, 1), filters=cf1, stride=2 if self.needDownSample else 1)
+        self.conv2 = ResNet50_BN_Conv(filters=cf2)
+        self.conv3 = ResNet50_BN_Conv(kernel_size=(1, 1), filters=cf3)
+
+        self.reshapeConv = ResNet50_BN_Conv( kernel_size=(1,1), filters=cf3, stride=2 if self.needDownSample else 1)
+
+    def call(self, inputs):
+        x = self.conv3(self.conv2(self.conv1(inputs)))
+
+        if self.needDownSample or self.changeShortcutChannel:
+        #filters 要使用最終的輸出才可相加
+            inputs = self.reshapeConv(inputs)
+
+        return layers.Add()([inputs ,x])
