@@ -78,3 +78,33 @@ class DistortImage(layers.Layer):
             return tf.map_fn(lambda img: func(img, self.numLayers, self.magnitude), inputs, dtype=tf.float32)
         else:
             return inputs
+
+class Inception(layers.Layer):
+    def __init__(self, *depth):
+        super().__init__()
+        self._build(depth)
+
+    def _build(self, depth):
+        conv1x1 ,(c3x3_r ,c3x3) ,(c5x5_r,c5x5) ,c1x1_pool = depth
+
+        getConv = lambda k, f, : layers.Conv2D(kernel_size=k, filters=f, padding='same', activation='relu')
+
+        self.b1x1 = getConv(1, conv1x1)
+        
+        self.b3x3_r = getConv(1, c3x3_r)
+        self.b3x3 = getConv(3, c3x3)
+
+        self.b5x5_r = getConv(1, c5x5_r)
+        self.b5x5 = getConv(5, c5x5)
+
+        self.pool = layers.MaxPool2D(pool_size=3 ,strides=1, padding='same')
+
+        self.b1x1_pool = getConv(1, c1x1_pool)
+
+    def call(self, inputs):
+        b1x1 = self.b1x1(inputs)
+        b3x3 = self.b3x3(self.b3x3_r(inputs))
+        b5x5 = self.b5x5(self.b5x5_r(inputs))
+        pool = self.b1x1_pool(self.pool(inputs))
+
+        return layers.concatenate([b1x1, b3x3, b5x5 ,pool],axis=3)
