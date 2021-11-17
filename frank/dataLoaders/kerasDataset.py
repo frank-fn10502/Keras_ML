@@ -18,7 +18,7 @@ class IkerasDataset(IDataset):
         if(info):
             print(f"dataset: {self.__doc__} \n")
 
-    def Done(self) -> IDataset:
+    def Done(self) -> 'IkerasDataset':
         '''
         將資料統一成 trainData, validationData
         - 會自動回傳所需的 batchsize (cfg 檔)
@@ -38,21 +38,23 @@ class IkerasDataset(IDataset):
 
             #     batch_datas.append(train[0])
             #     batch_labels.append(train[0])
-            start = 0
-            end = batchSize
+            while True:
+                start = 0
+                end = batchSize
 
-            while start  < len(labels): 
-                # load your images from numpy arrays or read from directory
-                x = datas[start:end] 
-                y = labels[start:end]
-                yield x, y
+                while start  < len(labels): 
+                    # load your images from numpy arrays or read from directory
+                    x = datas[start:end] 
+                    y = labels[start:end]
+                    yield x, y
 
-                start += batchSize
-                end += batchSize            
+                    start += batchSize
+                    end += batchSize            
 
         batchSize = self.cfg.getCfgData('dataLoader', 'batch_size')
         self.trainData = getDatas(self.train_x, self.train_y, batchSize)
         self.validationData = getDatas(self.test_x, self.test_y ,batchSize)
+        self.batchSize = batchSize
 
         self.inputShape = self.train_x[0].shape
         self.classes = self.train_y[0].size
