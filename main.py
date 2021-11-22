@@ -5,7 +5,7 @@ import os
 from frank.models.myModel import LeNet, AlexNet, VGG16, InceptionV1, ResNet50, EfficientNetV2_S
 from frank.config import Config
 from pathlib import Path
-from frank.dataLoaders.kerasDataset import MNIST
+from frank.dataLoaders.kerasDataset import MNIST, CIFAR10
 from frank.dataLoaders.flowers import Flowers102
 from utils.outputs import ModelOuputHelper
 
@@ -27,12 +27,12 @@ metrics=['accuracy']
 
 #dataset
 #--------------------
-dataLoader = MNIST(cfg, info=True).tocategorical().addChannel().Done()
+dataLoader = CIFAR10(cfg, info=True).tocategorical().addChannel().Done()
 #--------------------
 
 #model prepare
 #--------------------
-model = ResNet50(cfg, dataLoader.inputShape, dataLoader.classes)
+model = EfficientNetV2_S(cfg, dataLoader.inputShape, dataLoader.classes)
 
 model.compile(
     optimizer=optimizer,

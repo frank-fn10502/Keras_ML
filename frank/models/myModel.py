@@ -436,36 +436,42 @@ class ResNet50(FrankModel):
 class EfficientNetV2_S(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.EfficientNetV2_S") -> None:
         super().__init__(name, config, input_shape, classes)
+        self.dropoutRate = .2
 
         self._build(config)
 
 
     def _build(self, config: Config):
+        resize = config.getCfgData('model', 'resize', (128, 128))
+
         self.layer_scale = layers.Rescaling(scale=1./255)
+        self.layer_resizing = layers.Resizing(*resize,
+                                              interpolation='nearest')
         self.distortImage = DistortImage()
 
         self.conv1 = efficientv2.BN_ConvBlock(stride=2, filters=24)
         
         getStride = lambda i ,s: s if i == 0 else 1
-        getInOutFilter = lambda i ,o: (i ,o) if i == 0 else (o ,o)
+        getInOutFilter = lambda j, i ,o: (i ,o) if j == 0 else (o ,o)
         self.FusedBlockList = []
-        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(24, 24), 1, 3, getStride(i ,1)) for i in range(2)])
-        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(24, 38), 4, 3, getStride(i ,2)) for i in range(4)])
-        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(48, 64), 4, 3, getStride(i ,2)) for i in range(4)])
+        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(i, 24, 24), 1, 3, getStride(i ,1)) for i in range(2)])
+        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(i, 24, 38), 4, 3, getStride(i ,2)) for i in range(4)])
+        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(i, 48, 64), 4, 3, getStride(i ,2)) for i in range(4)])
 
         self.MB_BlockList = []
-        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(64, 128), 4, 3, getStride(i ,2), .25) for i in range(6)])
-        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(64, 128), 4, 3, getStride(i ,2), .25) for i in range(9)])
-        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(64, 128), 4, 3, getStride(i ,2), .25) for i in range(15)])
+        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(i, 64, 128), 4, 3, getStride(i, 2), .25) for i in range(6)])
+        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(i, 128, 160), 6, 3, getStride(i, 1), .25) for i in range(9)])
+        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(i, 160, 256), 6, 3, getStride(i, 2), .25) for i in range(15)])
 
         self.conv2 = efficientv2.BN_ConvBlock(kernel_size=1, stride=1, filters=1280)
         self.globalAvgPool = layers.GlobalAvgPool2D()
-        self.dropout = layers.Dropout(self.dropout)
+        self.dropout = layers.Dropout(self.dropoutRate)
         self.outputs = layers.Dense(self.classes, activation=activations.softmax)
 
     def call(self, inputs, training=False):
         x = inputs
         # x = self.distortImage(inputs)
+        x = self.layer_resizing(x)
 
         x = self.layer_scale(x)
 
@@ -482,7 +488,7 @@ class EfficientNetV2_S(FrankModel):
         # head
         x = self.conv2(x)
         x = self.globalAvgPool(x)
-        x = self.dropout(self.dropout)(x, training)
+        x = self.dropout(x, training)
 
 
         #output

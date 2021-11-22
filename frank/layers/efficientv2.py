@@ -26,6 +26,7 @@ class StochasticDropout(layers.Layer):
 
 class BN_ConvBlock(layers.Layer):
     def __init__(self, filters, kernel_size=(3, 3), stride=1 ,padding='same'):
+        super().__init__()
         self._conv = layers.Conv2D(kernel_size=kernel_size, filters=filters, strides=stride ,padding=padding)
         self._BN = layers.BatchNormalization()
         self._silu = tf.nn.silu
@@ -35,6 +36,7 @@ class BN_ConvBlock(layers.Layer):
 
 class BN_DepthwiseConv(layers.Layer):
     def __init__(self, kernel_size=(3, 3), stride=1 ,padding='same'):
+        super().__init__()
         self._conv = layers.DepthwiseConv2D(kernel_size=kernel_size, strides=stride ,padding=padding)
         self._BN = layers.BatchNormalization()
         self._silu = tf.nn.silu
@@ -44,18 +46,19 @@ class BN_DepthwiseConv(layers.Layer):
 
 class SE(layers.Layer):
     def __init__(self, filters ,output_filters):
+        super().__init__()
         self._conv1 = layers.Conv2D(kernel_size=1 ,strides= 1 ,filters=filters, padding='same')
         self._silu = tf.nn.silu
 
         self._conv2 = layers.Conv2D(kernel_size=1 ,strides=1 ,filters=output_filters, padding='same')
         self._act = tf.keras.activations.sigmoid
         
-
     def call(self, inputs):
         return self._act(self._conv2(self._silu(self._conv1(inputs))))
 
 class MBConvBlock(layers.Layer):
     def __init__(self, input_filters, output_filters, expansion_ratio, kernel_size, strides, se_ratio):
+        super().__init__()
         self.conv1 = BN_ConvBlock(input_filters * expansion_ratio ,kernel_size=1)
         self.conv2 = BN_DepthwiseConv(kernel_size=kernel_size,stride=strides)
         self.se = SE(input_filters * se_ratio, input_filters * expansion_ratio)
@@ -84,12 +87,13 @@ class MBConvBlock(layers.Layer):
     def _residual(self, x, inputs):
         if (self.strides == 1 and self.input_filters == self.output_filters):
             x = self._drop(x)
-            x = layers.Add()([inputs ,x])            
+            x = layers.Add()([x, inputs])            
 
         return x
 
-class Fused_MBConvBlock(MBConvBlock):
+class Fused_MBConvBlock(layers.Layer):
     def __init__(self, input_filters, output_filters , expansion_ratio, kernel_size, strides):
+        super().__init__()
         self.conv1 = BN_ConvBlock(input_filters * expansion_ratio, stride=strides, kernel_size=kernel_size)
 
         k_s = 1 if expansion_ratio != 1 else kernel_size
@@ -98,7 +102,13 @@ class Fused_MBConvBlock(MBConvBlock):
         self.conv2 = layers.Conv2D(kernel_size=k_s ,strides=s ,filters= output_filters ,padding='same')
         self.BN = layers.BatchNormalization()
 
+        self._drop = StochasticDropout()
+
         self.expansion_ratio = expansion_ratio
+
+        self.strides = strides
+        self.input_filters = input_filters
+        self.output_filters = output_filters
 
     def call(self ,inputs):
         x = inputs
@@ -111,5 +121,12 @@ class Fused_MBConvBlock(MBConvBlock):
         x = self.BN(x)
 
         x = self._residual(x ,inputs)
+
+        return x
+
+    def _residual(self, x, inputs):
+        if (self.strides == 1 and self.input_filters == self.output_filters):
+            x = self._drop(x)
+            x = layers.Add()([inputs ,x])            
 
         return x
