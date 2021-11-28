@@ -1,8 +1,8 @@
 FROM tensorflow/tensorflow:2.6.0-gpu-jupyter
 
 ARG USERNAME="frank"
-ARG USER_UID=1000
-ARG USER_GID=$USER_UID
+ARG USER_UID=1018
+ARG USER_GID=1019
 
 # Create the user https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user#_creating-a-nonroot-user
 RUN groupadd --gid $USER_GID $USERNAME \
