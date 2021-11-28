@@ -18,10 +18,10 @@
 		"hoovercj.vscode-power-mode",
 		"ms-toolsai.jupyter",
 		"codezombiech.gitignore",
-		"natizyskunk.sftp",
 		"eamodio.gitlens",
 		"nikitakunevich.snippet-creator",
-		"gruntfuggly.todo-tree"
+		"gruntfuggly.todo-tree",
+		"natizyskunk.sftp"
 	],
 	"runArgs": [
 		"--gpus=all",
