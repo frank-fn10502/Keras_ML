@@ -8,10 +8,11 @@ from ..layers import efficientv2
 
 
 class FrankModel(Model):
-    def __init__(self, name, cfg : Config, input_shape=(32, 32, 1), classes = 10):
-        super().__init__(name = name)
+    def __init__(self, name, cfg: Config, input_shape=(32, 32, 1), classes=10):
+        super().__init__(name=name)
         self.classes = cfg.getCfgData('model', 'classes', classes)
-        self.inputShape = cfg.getCfgData('dataLoader', 'input_shape', input_shape)
+        self.inputShape = cfg.getCfgData(
+            'dataLoader', 'input_shape', input_shape)
 
     def build_graph(self):
         '''
@@ -20,6 +21,7 @@ class FrankModel(Model):
         inputs = keras.Input(shape=(self.inputShape))
         return Model(inputs=inputs, outputs=self.call(inputs))
 
+
 class LeNet(FrankModel):
     def __init__(self, config: Config, input_shape=(32, 32, 1), classes=10, name="frank.LeNet") -> None:
         super().__init__(name, config, input_shape, classes)
@@ -27,9 +29,11 @@ class LeNet(FrankModel):
         self._build()
 
     def _build(self):
-        self.layer_scale = layers.Rescaling(scale=1./255)
-        self.conv1 = layers.Conv2D(kernel_size=(5, 5), filters=6, strides=1, activation='tanh')
-        self.conv2 = layers.Conv2D(kernel_size=(5, 5), filters=16, strides=1, activation='tanh')
+        self.layer_scale = layers.Rescaling(scale=1. / 255)
+        self.conv1 = layers.Conv2D(kernel_size=(
+            5, 5), filters=6, strides=1, activation='tanh')
+        self.conv2 = layers.Conv2D(kernel_size=(
+            5, 5), filters=16, strides=1, activation='tanh')
 
         self.maxPool1 = layers.MaxPooling2D(pool_size=2, strides=2)
         self.maxPool2 = layers.MaxPooling2D(pool_size=2, strides=2)
@@ -37,9 +41,10 @@ class LeNet(FrankModel):
         self.flatten = layers.Flatten(data_format='channels_last')
         self.dense1 = layers.Dense(120, activation='tanh')
         self.dense2 = layers.Dense(84, activation='tanh')
-        self.denseOutput = layers.Dense(self.classes, activation=activations.softmax)
+        self.denseOutput = layers.Dense(
+            self.classes, activation=activations.softmax)
 
-    def call(self ,inputs, training=False):
+    def call(self, inputs, training=False):
 
         # 數值縮成 0 ~ 1 之間
         x = self.layer_scale(inputs)
@@ -62,6 +67,7 @@ class LeNet(FrankModel):
 
         return self.denseOutput(x)
 
+
 class AlexNet(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.AlexNet") -> None:
         super().__init__(name, config, input_shape, classes)
@@ -71,11 +77,13 @@ class AlexNet(FrankModel):
     def _build(self, config: Config):
         resize = config.getCfgData('model', 'resize', (224, 224))
 
-        self.layer_scale = layers.Rescaling(scale=1./255)
+        self.layer_scale = layers.Rescaling(scale=1. / 255)
         self.layer_resizing = layers.Resizing(*resize,
                                               interpolation='nearest')
 
-        getConv = lambda k, f, s, p = 'valid' : layers.Conv2D(kernel_size=k, filters=f, strides=s, padding=p, activation='relu')
+        def getConv(k, f, s, p='valid'):
+            return layers.Conv2D(
+                kernel_size=k, filters=f, strides=s, padding=p, activation='relu')
 
         self.conv1 = getConv(11, 96, 4)
         self.moxPool1 = layers.MaxPool2D(pool_size=3, strides=2)
@@ -97,11 +105,12 @@ class AlexNet(FrankModel):
         self.dense2 = layers.Dense(4096, activation='relu')
         self.dropout2 = layers.Dropout(0.5)
 
-        self.outputs = layers.Dense(self.classes, activation=activations.softmax)
+        self.outputs = layers.Dense(
+            self.classes, activation=activations.softmax)
 
     def call(self, inputs, training=False):
 
-        #preprocessing layer
+        # preprocessing layer
         x = self.layer_scale(inputs)
         x = self.layer_resizing(x)
 
@@ -117,19 +126,17 @@ class AlexNet(FrankModel):
 
         #   (55 - 3) / 2 + 1  --> 27 * 27 * 96
         x = self.moxPool1(x)
-        x = self.BN1(x) #本來應該要用 LRN
-
+        x = self.BN1(x)  # 本來應該要用 LRN
 
         # conv2
         #   27 * 27 * 256
         x = self.conv2(x)
 
-        #   (27 - 3) / 2 + 1 --> 13 * 13 * 256
+        # (27 - 3) / 2 + 1 --> 13 * 13 * 256
         x = self.moxPool2(x)
-        x = self.BN2(x) #本來應該要用 LRN
+        x = self.BN2(x)  # 本來應該要用 LRN
 
-
-        #conv3 - 4 - 5
+        # conv3 - 4 - 5
         x = self.conv3(x)
         x = self.conv4(x)
         x = self.conv5(x)
@@ -139,7 +146,7 @@ class AlexNet(FrankModel):
 
         return x
 
-    def __buildFC(self, x, training : bool):
+    def __buildFC(self, x, training: bool):
         x = self.flatten(x)
         # FC6
         x = self.dense1(x)
@@ -156,21 +163,25 @@ class AlexNet(FrankModel):
 
         return x
 
+
 class VGG16(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, flexImgSize=False, name="frank.VGG16") -> None:
         super().__init__(name, config, input_shape, classes)
 
-        self.flexImgSize = config.getCfgData('model', 'flexImgSize', flexImgSize)
+        self.flexImgSize = config.getCfgData(
+            'model', 'flexImgSize', flexImgSize)
 
         self._build(config)
 
     def _build(self, config: Config):
         resize = config.getCfgData('model', 'resize', (224, 224))
-        self.layer_scale = layers.Rescaling(scale=1./255)
+        self.layer_scale = layers.Rescaling(scale=1. / 255)
         self.layer_resizing = layers.Resizing(*resize,
                                               interpolation='nearest')
 
-        getConv = lambda k, f, s = 1, p = 'same', a = 'relu' : layers.Conv2D(kernel_size=k, filters=f, strides=s, padding=p, activation=a)
+        def getConv(k, f, s=1, p='same', a='relu'):
+            return layers.Conv2D(
+                kernel_size=k, filters=f, strides=s, padding=p, activation=a)
 
         self.conv1 = getConv(3, 64)
         self.conv2 = getConv(3, 64)
@@ -194,7 +205,7 @@ class VGG16(FrankModel):
         self.conv12 = getConv(3, 512)
         self.conv13 = getConv(3, 512)
         self.maxPool5 = layers.MaxPool2D(pool_size=2, strides=2)
-        
+
         self.flatten = layers.Flatten()
         self.dense1 = layers.Dense(4096, activation='relu')
         self.dropout1 = layers.Dropout(0.5)
@@ -214,9 +225,11 @@ class VGG16(FrankModel):
         self.last_conv3 = getConv(1, 1000, p='valid', a=None)
         self.last_dropout3 = layers.Dropout(0.5)
 
-        self.globalAvgPool = layers.GlobalAveragePooling2D(data_format='channels_last')
+        self.globalAvgPool = layers.GlobalAveragePooling2D(
+            data_format='channels_last')
 
-        self.outputs = layers.Dense(self.classes, activation=activations.softmax)
+        self.outputs = layers.Dense(
+            self.classes, activation=activations.softmax)
 
     def call(self, inputs, training=False):
         x = self.layer_scale(inputs)
@@ -224,53 +237,55 @@ class VGG16(FrankModel):
 
         x = self.__buildConv(x)
 
-        if self.flexImgSize: x = self.__buildLastConv(x, training)
-        else: x = self.__buildFC(x, training)
-        
+        if self.flexImgSize:
+            x = self.__buildLastConv(x, training)
+        else:
+            x = self.__buildFC(x, training)
+
         outputs = self.outputs(x)
 
         return outputs
 
     def __buildConv(self, x):
-        #conv1
+        # conv1
         x = self.conv1(x)
-        #conv2
+        # conv2
         x = self.conv2(x)
-        #(224 - 2) / 2 + 1 --> 112 * 112 * 64
+        # (224 - 2) / 2 + 1 --> 112 * 112 * 64
         x = self.maxPool1(x)
 
-        #conv3
+        # conv3
         x = self.conv3(x)
-        #conv4
+        # conv4
         x = self.conv4(x)
-        #(112 - 2) / 2 + 1 --> 56 * 56 * 128
+        # (112 - 2) / 2 + 1 --> 56 * 56 * 128
         x = self.maxPool2(x)
 
-        #conv5
+        # conv5
         x = self.conv5(x)
-        #conv6
+        # conv6
         x = self.conv6(x)
-        #conv7
+        # conv7
         x = self.conv7(x)
-        #(56 - 2) / 2 + 1 --> 28 * 28 * 256
+        # (56 - 2) / 2 + 1 --> 28 * 28 * 256
         x = self.maxPool3(x)
 
-        #conv8
+        # conv8
         x = self.conv8(x)
-        #conv9
+        # conv9
         x = self.conv9(x)
-        #conv10
+        # conv10
         x = self.conv10(x)
-        #(28 - 2) / 2 + 1 --> 14 * 14 * 512
+        # (28 - 2) / 2 + 1 --> 14 * 14 * 512
         x = self.maxPool4(x)
 
-        #conv11
+        # conv11
         x = self.conv11(x)
-        #conv12
+        # conv12
         x = self.conv12(x)
-        #conv13
+        # conv13
         x = self.conv13(x)
-        #(14 - 2) / 2 + 1 --> 7 * 7 * 512
+        # (14 - 2) / 2 + 1 --> 7 * 7 * 512
         x = self.maxPool5(x)
 
         return x
@@ -285,7 +300,7 @@ class VGG16(FrankModel):
         x = self.dense2(x)
         x = self.dropout2(x, training)
 
-        #FC3
+        # FC3
         x = self.dense3(x)
         x = self.dropout3(x, training)
 
@@ -304,10 +319,11 @@ class VGG16(FrankModel):
         x = self.last_conv3(x)
         x = self.last_dropout3(x, training)
 
-        #https://keras.io/api/layers/pooling_layers/global_average_pooling2d/
+        # https://keras.io/api/layers/pooling_layers/global_average_pooling2d/
         x = self.globalAvgPool(x)
 
         return x
+
 
 class InceptionV1(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.InceptionV1") -> None:
@@ -318,53 +334,54 @@ class InceptionV1(FrankModel):
     def _build(self, config: Config):
         resize = config.getCfgData('model', 'resize', (224, 224))
 
-        self.layer_scale = layers.Rescaling(scale=1./255)
+        self.layer_scale = layers.Rescaling(scale=1. / 255)
         self.layer_resizing = layers.Resizing(*resize,
                                               interpolation='nearest')
 
-        self.conv1 = layers.Conv2D(kernel_size=7 ,strides=2 ,filters=64 ,activation='relu' ,padding='same')
-        self.pool1 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
-        self.conv2 = layers.Conv2D(kernel_size=3, strides=1, filters=192, padding='same', activation='relu')
-        self.pool2 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
+        self.conv1 = layers.Conv2D(
+            kernel_size=7, strides=2, filters=64, activation='relu', padding='same')
+        self.pool1 = layers.MaxPool2D(pool_size=3, strides=2, padding='same')
+        self.conv2 = layers.Conv2D(
+            kernel_size=3, strides=1, filters=192, padding='same', activation='relu')
+        self.pool2 = layers.MaxPool2D(pool_size=3, strides=2, padding='same')
 
-        self.inception1 = InceptionBlock(64 ,(96,128) ,(16 ,32) ,32)
-        self.inception2 = InceptionBlock(128 ,(128,192) ,(32 ,96) ,64)
+        self.inception1 = InceptionBlock(64, (96, 128), (16, 32), 32)
+        self.inception2 = InceptionBlock(128, (128, 192), (32, 96), 64)
 
-        self.pool3 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
+        self.pool3 = layers.MaxPool2D(pool_size=3, strides=2, padding='same')
 
-        self.inception3 = InceptionBlock(192 ,(96,208) ,(16 ,48) ,64)
-        self.inception4 = InceptionBlock(160 ,(112,224) ,(24 ,64) ,64)
-        self.inception5 = InceptionBlock(128 ,(128,256) ,(24 ,64) ,64)
-        self.inception6 = InceptionBlock(112 ,(144,288) ,(32 ,64) ,64)
-        self.inception7 = InceptionBlock(256 ,(160,320) ,(32 ,128) ,128)
+        self.inception3 = InceptionBlock(192, (96, 208), (16, 48), 64)
+        self.inception4 = InceptionBlock(160, (112, 224), (24, 64), 64)
+        self.inception5 = InceptionBlock(128, (128, 256), (24, 64), 64)
+        self.inception6 = InceptionBlock(112, (144, 288), (32, 64), 64)
+        self.inception7 = InceptionBlock(256, (160, 320), (32, 128), 128)
 
-        self.pool4 = layers.MaxPool2D(pool_size=3 ,strides=2, padding='same')
+        self.pool4 = layers.MaxPool2D(pool_size=3, strides=2, padding='same')
 
-        self.inception8 = InceptionBlock(256 ,(160,320) ,(32 ,128) ,128)
-        self.inception9 = InceptionBlock(384 ,(192,384) ,(48 ,128) ,128)
-        
-        self.globalPool = layers.GlobalAveragePooling2D(data_format='channels_last')
+        self.inception8 = InceptionBlock(256, (160, 320), (32, 128), 128)
+        self.inception9 = InceptionBlock(384, (192, 384), (48, 128), 128)
+
+        self.globalPool = layers.GlobalAveragePooling2D(
+            data_format='channels_last')
         self.dropout = layers.Dropout(.4)
 
-        self.outputs = layers.Dense(self.classes, activation=activations.softmax)
+        self.outputs = layers.Dense(
+            self.classes, activation=activations.softmax)
 
     def call(self, inputs, training=False):
         x = self.layer_scale(inputs)
         x = self.layer_resizing(x)
-        
+
         x = self.conv1(x)
-        #https://keras.io/api/layers/pooling_layers/max_pooling2d/
+        # https://keras.io/api/layers/pooling_layers/max_pooling2d/
         x = self.pool1(x)
         x = self.conv2(x)
         x = self.pool2(x)
 
-
         x = self.inception1(x)
         x = self.inception2(x)
 
-
         x = self.pool3(x)
-
 
         x = self.inception3(x)
         x = self.inception4(x)
@@ -372,20 +389,18 @@ class InceptionV1(FrankModel):
         x = self.inception6(x)
         x = self.inception7(x)
 
-
         x = self.pool4(x)
-
 
         x = self.inception8(x)
         x = self.inception9(x)
 
-
         x = self.globalPool(x)
         x = self.dropout(x, training)
-    
+
         outputs = self.outputs(x)
 
         return outputs
+
 
 class ResNet50(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.ResNet50") -> None:
@@ -396,31 +411,42 @@ class ResNet50(FrankModel):
     def _build(self, config: Config):
         resize = config.getCfgData('model', 'resize', (224, 224))
 
-        self.layer_scale = layers.Rescaling(scale=1./255)
+        self.layer_scale = layers.Rescaling(scale=1. / 255)
         self.layer_resizing = layers.Resizing(*resize,
                                               interpolation='nearest')
 
-        self.conv1 = layers.Conv2D(kernel_size=(7, 7), filters=64, strides=2, padding='same')
-        self.pool1 = layers.MaxPool2D(pool_size=(3,3),strides=2 ,padding='same')
-        
+        self.conv1 = layers.Conv2D(kernel_size=(
+            7, 7), filters=64, strides=2, padding='same')
+        self.pool1 = layers.MaxPool2D(
+            pool_size=(3, 3), strides=2, padding='same')
+
         self._residualblockList = []
-        self._residualblockList.append(ResidualBottleneckBlock(64, 64, 256, changeShortcutChannel=True))
-        self._residualblockList.extend([ResidualBottleneckBlock(64, 64, 256) for i in range(2)])
+        self._residualblockList.append(ResidualBottleneckBlock(
+            64, 64, 256, changeShortcutChannel=True))
+        self._residualblockList.extend(
+            [ResidualBottleneckBlock(64, 64, 256) for i in range(2)])
 
-        self._residualblockList.append(ResidualBottleneckBlock(128, 128, 512, needDownSample=True))
-        self._residualblockList.extend([ResidualBottleneckBlock(128, 128, 512) for i in range(3)])
+        self._residualblockList.append(
+            ResidualBottleneckBlock(128, 128, 512, needDownSample=True))
+        self._residualblockList.extend(
+            [ResidualBottleneckBlock(128, 128, 512) for i in range(3)])
 
-        self._residualblockList.append(ResidualBottleneckBlock(256, 256, 1024, needDownSample=True))
-        self._residualblockList.extend([ResidualBottleneckBlock(256, 256, 1024) for i in range(5)])
+        self._residualblockList.append(
+            ResidualBottleneckBlock(256, 256, 1024, needDownSample=True))
+        self._residualblockList.extend(
+            [ResidualBottleneckBlock(256, 256, 1024) for i in range(5)])
 
-        self._residualblockList.append(ResidualBottleneckBlock(512, 512, 2048, needDownSample=True))
-        self._residualblockList.extend([ResidualBottleneckBlock(512, 512, 2048) for i in range(3)])
+        self._residualblockList.append(
+            ResidualBottleneckBlock(512, 512, 2048, needDownSample=True))
+        self._residualblockList.extend(
+            [ResidualBottleneckBlock(512, 512, 2048) for i in range(3)])
 
         self.globalPool = layers.GlobalAveragePooling2D()
-        self.outputs = layers.Dense(self.classes, activation=activations.softmax)
+        self.outputs = layers.Dense(
+            self.classes, activation=activations.softmax)
 
     def call(self, inputs, training=False):
-        x = self.layer_scale(inputs) 
+        x = self.layer_scale(inputs)
         x = self.layer_resizing(x)
 
         x = self.conv1(x)
@@ -433,6 +459,7 @@ class ResNet50(FrankModel):
 
         return self.outputs(x)
 
+
 class EfficientNetV2_S(FrankModel):
     def __init__(self, config: Config, input_shape=(None, None, 3), classes=10, name="frank.EfficientNetV2_S") -> None:
         super().__init__(name, config, input_shape, classes)
@@ -440,33 +467,44 @@ class EfficientNetV2_S(FrankModel):
 
         self._build(config)
 
-
     def _build(self, config: Config):
         resize = config.getCfgData('model', 'resize', (128, 128))
 
-        self.layer_scale = layers.Rescaling(scale=1./255)
+        self.layer_scale = layers.Rescaling(scale=1. / 255)
         self.layer_resizing = layers.Resizing(*resize,
                                               interpolation='nearest')
         self.distortImage = DistortImage()
 
         self.conv1 = efficientv2.BN_ConvBlock(stride=2, filters=24)
-        
-        getStride = lambda i ,s: s if i == 0 else 1
-        getInOutFilter = lambda j, i ,o: (i ,o) if j == 0 else (o ,o)
+
+        def getStride(i, s):
+            return s if i == 0 else 1
+
+        def getInOutFilter(j, i, o):
+            return (i, o) if j == 0 else (o, o)
+
         self.FusedBlockList = []
-        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(i, 24, 24), 1, 3, getStride(i ,1)) for i in range(2)])
-        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(i, 24, 38), 4, 3, getStride(i ,2)) for i in range(4)])
-        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(*getInOutFilter(i, 48, 64), 4, 3, getStride(i ,2)) for i in range(4)])
+        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(
+            *getInOutFilter(i, 24, 24), 1, 3, getStride(i, 1)) for i in range(2)])
+        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(
+            *getInOutFilter(i, 24, 38), 4, 3, getStride(i, 2)) for i in range(4)])
+        self.FusedBlockList.extend([efficientv2.Fused_MBConvBlock(
+            *getInOutFilter(i, 48, 64), 4, 3, getStride(i, 2)) for i in range(4)])
 
         self.MB_BlockList = []
-        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(i, 64, 128), 4, 3, getStride(i, 2), .25) for i in range(6)])
-        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(i, 128, 160), 6, 3, getStride(i, 1), .25) for i in range(9)])
-        self.MB_BlockList.extend([efficientv2.MBConvBlock(*getInOutFilter(i, 160, 256), 6, 3, getStride(i, 2), .25) for i in range(15)])
+        self.MB_BlockList.extend([efficientv2.MBConvBlock(
+            *getInOutFilter(i, 64, 128), 4, 3, getStride(i, 2), .25) for i in range(6)])
+        self.MB_BlockList.extend([efficientv2.MBConvBlock(
+            *getInOutFilter(i, 128, 160), 6, 3, getStride(i, 1), .25) for i in range(9)])
+        self.MB_BlockList.extend([efficientv2.MBConvBlock(
+            *getInOutFilter(i, 160, 256), 6, 3, getStride(i, 2), .25) for i in range(15)])
 
-        self.conv2 = efficientv2.BN_ConvBlock(kernel_size=1, stride=1, filters=1280)
+        self.conv2 = efficientv2.BN_ConvBlock(
+            kernel_size=1, stride=1, filters=1280)
         self.globalAvgPool = layers.GlobalAvgPool2D()
         self.dropout = layers.Dropout(self.dropoutRate)
-        self.outputs = layers.Dense(self.classes, activation=activations.softmax)
+        self.outputs = layers.Dense(
+            self.classes, activation=activations.softmax)
 
     def call(self, inputs, training=False):
         x = inputs
@@ -490,6 +528,5 @@ class EfficientNetV2_S(FrankModel):
         x = self.globalAvgPool(x)
         x = self.dropout(x, training)
 
-
-        #output
+        # output
         return self.outputs(x)

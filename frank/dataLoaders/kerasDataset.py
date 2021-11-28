@@ -4,6 +4,7 @@ from tensorflow import keras
 import numpy as np
 from ..config import Config
 
+
 class IkerasDataset(IDataset):
     '''
     將 keras 內建的資料集轉換成 python generate 以統一 model.fit 的參數
@@ -11,7 +12,8 @@ class IkerasDataset(IDataset):
         - self.trainData
         - self.validationData
     '''
-    def __init__(self, cfg : Config, info: bool = False) -> None:
+
+    def __init__(self, cfg: Config, info: bool = False) -> None:
         super().__init__()
         self.cfg = cfg
         self.info = info
@@ -33,7 +35,7 @@ class IkerasDataset(IDataset):
 
         batchSize = self.cfg.getCfgData('dataLoader', 'batch_size')
         self.trainData = getDatas(self._train_x, self._train_y, batchSize)
-        self.validationData = getDatas(self._test_x, self._test_y ,batchSize)
+        self.validationData = getDatas(self._test_x, self._test_y, batchSize)
         self.batchSize = batchSize
 
         self.inputShape = self._train_x[0].shape
@@ -51,16 +53,19 @@ class IkerasDataset(IDataset):
         pre_train_y = self._train_y[0]
         pre_test_y = self._test_y[0]
 
-        self._train_y = tf.keras.utils.to_categorical(self._train_y, dtype="uint8")
-        self._test_y  = tf.keras.utils.to_categorical(self._test_y, dtype="uint8")
+        self._train_y = tf.keras.utils.to_categorical(
+            self._train_y, dtype="uint8")
+        self._test_y = tf.keras.utils.to_categorical(
+            self._test_y, dtype="uint8")
 
         if self.info:
             print("one-hot encoder:")
             print(f"\tindex: 0 ,pre: {pre_train_y} ,after:{self._train_y[0]}")
             print(
                 f"\tindex: 0 ,pre: {pre_test_y} ,after:{self._test_y[0]}\n{'-'*10}")
-        
+
         return self
+
 
 class MNIST(IkerasDataset):
     '''
@@ -68,16 +73,17 @@ class MNIST(IkerasDataset):
     This is a dataset of 60,000 28x28 grayscale images of the 10 digits, along with a test set of 10,000 images
     '''
 
-    def __init__(self, cfg : Config, info: bool = False) -> None:
+    def __init__(self, cfg: Config, info: bool = False) -> None:
         self.dataset = keras.datasets.mnist
         (self._train_x, self._train_y), \
-        (self._test_x, self._test_y) = self.dataset.load_data()
+            (self._test_x, self._test_y) = self.dataset.load_data()
         super().__init__(cfg, info)
 
     def addChannel(self) -> 'MNIST':
         self._train_x = np.expand_dims(self._train_x, 3)
         self._test_x = np.expand_dims(self._test_x, 3)
         return self
+
 
 class CIFAR10(IkerasDataset):
     '''
@@ -86,11 +92,12 @@ class CIFAR10(IkerasDataset):
     There are 50000 training images and 10000 test images.
     '''
 
-    def __init__(self, cfg : Config, info: bool = False) -> None:
+    def __init__(self, cfg: Config, info: bool = False) -> None:
         self.dataset = keras.datasets.cifar10
         (self._train_x, self._train_y), \
-        (self._test_x, self._test_y) = self.dataset.load_data()
+            (self._test_x, self._test_y) = self.dataset.load_data()
         super().__init__(cfg, info)
+
 
 class CIFAR100(IkerasDataset):
     '''
@@ -102,8 +109,9 @@ class CIFAR100(IkerasDataset):
         Classes: (beaver, dolphin, otter, seal, whale)
     '''
 
-    def __init__(self, cfg : Config, label_mode: str = "fine", info: bool = False) -> None:
+    def __init__(self, cfg: Config, label_mode: str = "fine", info: bool = False) -> None:
         self.dataset = keras.datasets.cifar100
         (self._train_x, self._train_y), \
-        (self._test_x, self._test_y) = self.dataset.load_data(label_mode=label_mode)
+            (self._test_x, self._test_y) = self.dataset.load_data(
+                label_mode=label_mode)
         super().__init__(cfg, info)

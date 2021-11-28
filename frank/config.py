@@ -6,16 +6,17 @@ class Config:
     '''
     取得 trainig 的設定檔
     '''
+
     def __init__(self, path='cfg.ini') -> None:
         self.config = configparser.ConfigParser(allow_no_value=True)
         self.config.read(path)
 
-    def getCfgData(self, section, key, data = None):
+    def getCfgData(self, section, key, data=None):
         '''
         從 cfg 檔取得資料，和傳入的資料比對，如果不同將新資料紀錄於 self.config 以便之後 save 新資料
         - section: cfg 檔的區段
         - key: 區段中的哪一選項
-        - data: 新資料，如果和 cfg 設定值不同則會自動更新值 
+        - data: 新資料，如果和 cfg 設定值不同則會自動更新值
 
         exception KeyError:
             如果 section, key 非空則寫入新值
@@ -28,8 +29,8 @@ class Config:
                 self.config[section][key] = str(data)
                 result = data
 
-        except  KeyError:
-            if section == None or key == None:
+        except KeyError:
+            if section is None or key is None:
                 raise Exception('請填入 section, key')
 
             self.config[section][key] = str(data)
@@ -38,7 +39,7 @@ class Config:
         return result
 
     def setCommient(self, section: str, s: str):
-        s = s.replace("\n","\n#")
+        s = s.replace("\n", "\n#")
         self.config.set(section, f'# {s}')
 
     def saveConfig(self, savePath: Path):
@@ -47,4 +48,3 @@ class Config:
         '''
         with open(savePath / 'cfg.ini', 'w') as f:
             self.config.write(f)
-    

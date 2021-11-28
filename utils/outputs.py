@@ -1,13 +1,14 @@
 import datetime
-import matplotlib.pyplot as plt
-import tensorflow.keras as keras
-from tensorflow.keras import Model
-from pathlib import Path
 import json
-import numpy as np
 import sys
+from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow.keras as keras
 from frank.config import Config
+from tensorflow.keras import Model
+
 
 class ModelOuputHelper:
     '''
@@ -17,14 +18,15 @@ class ModelOuputHelper:
     def __init__(self,
                  model: Model,
                  root_directory=None
-                ) -> None:
-        if(model == None):
+                 ) -> None:
+        if(model is None):
             raise Exception("please check model")
         self.model = model
 
         rootFolder = root_directory or 'result'
 
-        self.rootFolder = Path(rootFolder) / self.model.name / datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
+        self.rootFolder = Path(rootFolder) / self.model.name / \
+            datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
 
         self._createFolder()
 
@@ -34,7 +36,7 @@ class ModelOuputHelper:
         self.modelArchFolder = self.rootFolder / 'arch'
         self.resultFolder = self.rootFolder / 'result'
         self.tfBoardFolder = self.resultFolder / 'logs'
-        self.myResultFolder = self.resultFolder /'myResult'
+        self.myResultFolder = self.resultFolder / 'myResult'
 
         self.weightsFolder.mkdir(parents=True, exist_ok=True)
         self.cfgFolder.mkdir(parents=True, exist_ok=True)
@@ -42,7 +44,7 @@ class ModelOuputHelper:
         self.resultFolder.mkdir(parents=True, exist_ok=True)
         self.tfBoardFolder.mkdir(parents=True, exist_ok=True)
         self.myResultFolder.mkdir(parents=True, exist_ok=True)
-        
+
     def saveTrainProcessImg(self, history=None) -> None:
         '''
         將訓練過程用 matplotlib.pyplot 畫成圖表
@@ -50,30 +52,29 @@ class ModelOuputHelper:
         '''
         modelHistory = history
         history = history.history
-        if(history == None):
+        if(history is None):
             return
-        plt.figure(figsize = (15,5))
-        
-        
-        self.__pltOnePlot('loss' ,(1,2,1),
-        [
-            [history['loss'] ,'-'],
-            [history['val_loss'] ,'--'],
-        ],loc_mini='upper right')
-        self.__pltOnePlot('accuracy' ,(1,2,2),
-        [
-            [history['accuracy'] ,'-'],
-            [history['val_accuracy'] ,'--'],
+        plt.figure(figsize=(15, 5))
+
+        self.__pltOnePlot('loss', (1, 2, 1),
+                          [
+            [history['loss'], '-'],
+            [history['val_loss'], '--'],
+        ], loc_mini='upper right')
+        self.__pltOnePlot('accuracy', (1, 2, 2),
+                          [
+            [history['accuracy'], '-'],
+            [history['val_accuracy'], '--'],
         ])
 
-        plt.savefig( (self.myResultFolder/'train-progress.jpg').__str__() )
+        plt.savefig((self.myResultFolder / 'train-progress.jpg').__str__())
         plt.show()
 
         print('drawTrainProcess... Done')
 
-    def __pltOnePlot(self,title, pos, plotDatas: list,loc_mini:str = 'upper left'):
+    def __pltOnePlot(self, title, pos, plotDatas: list, loc_mini: str = 'upper left'):
         '''
-        pos: 
+        pos:
             ex: (1,2,1)
 
         plotDatas:
@@ -90,34 +91,34 @@ class ModelOuputHelper:
         plt.title(title)
         plt.xlabel('epoch')
         plt.ylabel('loss')
-        plt.grid(True,linestyle = "--",color = 'gray' ,linewidth = '0.5')
+        plt.grid(True, linestyle="--", color='gray', linewidth='0.5')
         xticks_start = 0
         xticks_end = 0
         yticks_start = sys.maxsize
         yticks_end = 0
-        
-        for datas ,sign in plotDatas:
-            xticks_end = max(xticks_end ,len(datas))
-            yticks_end = max(max(datas) ,yticks_end)
-            yticks_start = min(min(datas) ,yticks_start)
 
-            plt.plot(datas ,sign)
-        
+        for datas, sign in plotDatas:
+            xticks_end = max(xticks_end, len(datas))
+            yticks_end = max(max(datas), yticks_end)
+            yticks_start = min(min(datas), yticks_start)
+
+            plt.plot(datas, sign)
+
         plt.legend(['train', 'test'], loc=loc_mini)
-        plt.xlim([xticks_start,xticks_end])
-        plt.ylim([yticks_start,yticks_end])
-        
-        x_range = max(10 ,(xticks_start + xticks_end) / 20)
-        x_tick_list = np.arange(xticks_start ,xticks_end ,x_range)
-        x_tick_list = np.append(x_tick_list ,xticks_end)
-        plt.xticks(x_tick_list,rotation=90)
+        plt.xlim([xticks_start, xticks_end])
+        plt.ylim([yticks_start, yticks_end])
+
+        x_range = max(10, (xticks_start + xticks_end) / 20)
+        x_tick_list = np.arange(xticks_start, xticks_end, x_range)
+        x_tick_list = np.append(x_tick_list, xticks_end)
+        plt.xticks(x_tick_list, rotation=90)
 
         y_range = (yticks_start + yticks_end) / 10
-        y_tick_list = np.arange(yticks_start ,yticks_end - y_range ,y_range)
-        y_tick_list = np.append(y_tick_list ,yticks_end)
-        plt.yticks( y_tick_list )
-        
-    def saveTrainHistory(self ,history):
+        y_tick_list = np.arange(yticks_start, yticks_end - y_range, y_range)
+        y_tick_list = np.append(y_tick_list, yticks_end)
+        plt.yticks(y_tick_list)
+
+    def saveTrainHistory(self, history):
         '''
         儲存 train 產生的 history 以備不時之需
         '''
@@ -126,7 +127,7 @@ class ModelOuputHelper:
         path = self.myResultFolder / 'trainHistory.json'
         with path.open('w') as f:
             json.dump(history, f, ensure_ascii=False, indent=4)
-        
+
         print('saveTrainHistory... Done')
 
     # def saveModel(self):
@@ -136,7 +137,7 @@ class ModelOuputHelper:
     #     self.model.save(self.train_result_dir.__str__())
 
     #     print('saveModel... Done')
-    
+
     def seveModelArchitecture(self) -> None:
         '''
         儲存 model:
@@ -152,18 +153,20 @@ class ModelOuputHelper:
         '''
         keras.utils.plot_model(
             self.model.build_graph(),
-            to_file=(self.modelArchFolder / 'simple-model-architecture.png').__str__(),
+            to_file=(self.modelArchFolder /
+                     'simple-model-architecture.png').__str__(),
             show_shapes=False,
             expand_nested=True,
         )
         keras.utils.plot_model(
             self.model.build_graph(),
-            to_file=(self.modelArchFolder / 'complete-model-architecture.png').__str__(),
+            to_file=(self.modelArchFolder /
+                     'complete-model-architecture.png').__str__(),
             show_shapes=True,
             expand_nested=True,
         )
         print('saveModelImg... Done')
-    
+
     def __saveModelTxT(self):
         '''
         儲存 model.summary()

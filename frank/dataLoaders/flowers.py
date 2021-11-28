@@ -1,7 +1,8 @@
-from .interface import IDataset
-import tensorflow as tf
 import scipy.io
+import tensorflow as tf
+
 from ..config import Config
+from .interface import IDataset
 
 
 class Flowers102(IDataset):
@@ -11,27 +12,28 @@ class Flowers102(IDataset):
         1. Consisting of 102 different categories of flowers common to the UK
         2. Each class consists of between 40 and 258 images
     '''
-    def __init__(self, 
-                 cfg : Config, 
-                 info = False,
-                 labelPath = 'dataset/flowers/imagelabels.mat', 
-                 imagePath = 'dataset/flowers/') -> None:
+
+    def __init__(self,
+                 cfg: Config,
+                 info=False,
+                 labelPath='dataset/flowers/imagelabels.mat',
+                 imagePath='dataset/flowers/') -> None:
 
         super().__init__()
         if(info):
             print(f"dataset: {self.__doc__} \n")
-            
+
         self.cfg = cfg
         self.info = info
         self.labelPath = labelPath
         self.imagePath = imagePath
 
-        #目前下載的資料集是這樣處理
+        # 目前下載的資料集是這樣處理
         self.__labels = scipy.io.loadmat(self.labelPath)['labels'][0].tolist()
         self.__labelMode = 'int'
 
         self.__batchSize = 32
-        self.__imgSize = (256,256)
+        self.__imgSize = (256, 256)
         self.__seed = 2021
         self.__split = .2
 
@@ -55,9 +57,12 @@ class Flowers102(IDataset):
         return self
 
     def Done(self) -> IDataset:
-        batchSize = self.cfg.getCfgData('dataLoader', 'batch_size', self.__batchSize)
-        imgSize = self.cfg.getCfgData('dataLoader', 'input_shape', (*self.__imgSize ,3))[0:2]
-        validationSplit = self.cfg.getCfgData('dataLoader', 'validation', self.__split)
+        batchSize = self.cfg.getCfgData(
+            'dataLoader', 'batch_size', self.__batchSize)
+        imgSize = self.cfg.getCfgData(
+            'dataLoader', 'input_shape', (*self.__imgSize, 3))[0:2]
+        validationSplit = self.cfg.getCfgData(
+            'dataLoader', 'validation', self.__split)
         seed = self.cfg.getCfgData('dataLoader', 'seed', self.__seed)
 
         # get dataset from dir
@@ -74,7 +79,7 @@ class Flowers102(IDataset):
             shuffle=True,
             interpolation="nearest",
             crop_to_aspect_ratio=True)
-            
+
         self.validationData = tf.keras.preprocessing.image_dataset_from_directory(
             directory=self.imagePath,
             labels=self.__labels,

@@ -12,9 +12,9 @@ import math
 Training Configure
 ********************************************
 1. Learning Rate
-    + particular implementation : Scale Learning Rate Linearly with Batch_SIZE 
+    + particular implementation : Scale Learning Rate Linearly with Batch_SIZE
     (Warmup: Learning Implementation, and Cosine Anealing + Linear scaling)
-   
+
     # optional not implement yet
     + Schedule Learning with Constrain-Update during training
 '''
@@ -23,16 +23,17 @@ Training Configure
 # Section SimCLR Implementation Learning rate BYOL implementation
 # https://colab.research.google.com/drive/1MWgcDAqnB0zZlXz3fHIW0HLKwZOi5UBb?usp=sharing
 
-def get_train_steps(num_examples ,args):
+
+def get_train_steps(num_examples, args):
     """Determine the number of training steps."""
     if args.train_steps is None:
-        train_steps = (num_examples * args.train_epochs //
-                       args.train_batch_size + 1)
+        train_steps = (num_examples * args.train_epochs // args.train_batch_size + 1)
     else:
         print("You Implement the args training steps")
         train_steps = args.train_steps
 
     return train_steps
+
 
 class WarmUpAndCosineDecay(tf.keras.optimizers.schedules.LearningRateSchedule):
     """Applies a warmup schedule on a given learning rate decay schedule.
@@ -52,8 +53,7 @@ class WarmUpAndCosineDecay(tf.keras.optimizers.schedules.LearningRateSchedule):
         with tf.name_scope(self._name or 'WarmUpAndCosineDecay'):
             args = self.args
             warmup_steps = int(
-                round(args.warmup_epochs * self.num_examples //
-                      args.train_batch_size))
+                round(args.warmup_epochs * self.num_examples // args.train_batch_size))
             if args.learning_rate_scaling == 'linear':
                 scaled_lr = self.base_learning_rate * args.train_batch_size / 256.
             elif args.learning_rate_scaling == 'sqrt':
@@ -68,7 +68,7 @@ class WarmUpAndCosineDecay(tf.keras.optimizers.schedules.LearningRateSchedule):
                 step / float(warmup_steps) * scaled_lr if warmup_steps else scaled_lr)
 
             # Cosine decay learning rate schedule
-            total_steps = get_train_steps(self.num_examples ,args)
+            total_steps = get_train_steps(self.num_examples, args)
             # TODO(srbs): Cache this object.
             cosine_decay = tf.keras.experimental.CosineDecay(
                 scaled_lr, total_steps - warmup_steps)
