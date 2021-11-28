@@ -150,3 +150,5 @@ cython_debug/
 
 #frank custom
 temp/
+dataset/
+*ipynb
