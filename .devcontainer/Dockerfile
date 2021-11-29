@@ -1,5 +1,7 @@
 FROM tensorflow/tensorflow:2.6.0-gpu-jupyter
 
+ENV HOME /home/frank
+
 ARG USERNAME="frank"
 ARG USER_UID=1018
 ARG USER_GID=1019
@@ -44,6 +46,20 @@ RUN pip install tensorflow-addons==0.14.0 &&\
 
 RUN pip install flake8
 
+RUN apt install -y zsh \
+    vim \
+    wget
+
 # [Optional] Set the default user. Omit if you want to keep the default as root.
 # 請注意中途更改 user 要注意資料夾權限的問題
 USER $USERNAME
+
+RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/v1.1.2/zsh-in-docker.sh)" -- \
+       -p git \
+       -p https://github.com/zsh-users/zsh-autosuggestions \
+       -p https://github.com/zsh-users/zsh-syntax-highlighting \
+       -a 'export TERM=xterm-256color'
+
+# 將之前 Powerlevel10k 設定資料複製到 container
+ADD ./.p10k.zsh $HOME
+RUN echo '[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh' >> ~/.zshrc
